@@ -240,7 +240,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
                 Dr
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-semibold text-slate-800 leading-none">Dr. Shinde, PT</p>
+                <p className="text-xs font-semibold text-slate-800 leading-none">Dr. Kekre</p>
                 <p className="text-[10px] text-slate-400 font-medium">Lead Physiotherapist</p>
               </div>
             </div>
