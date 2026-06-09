@@ -345,6 +345,29 @@ export const db = {
     return campaigns.find(c => c.id === id) || null;
   },
 
+  async deleteCampaign(id: string): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+      // Delete calls related to this campaign first to avoid FK constraint issues
+      const { error: callsError } = await supabase.from('calls').delete().eq('campaign_id', id);
+      if (callsError) throw callsError;
+
+      // Delete the campaign itself
+      const { error: campError } = await supabase.from('campaigns').delete().eq('id', id);
+      if (campError) throw campError;
+    } else {
+      const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+      const calls = getLocalStorageData<Call[]>('h360_calls', []);
+
+      const updatedCampaigns = campaigns.filter(c => c.id !== id);
+      const updatedCalls = calls.filter(c => c.campaign_id !== id);
+
+      setLocalStorageData('h360_campaigns', updatedCampaigns);
+      setLocalStorageData('h360_calls', updatedCalls);
+      notifySubscribers('REFRESH', 'all', null);
+    }
+  },
+
+
   async createCampaign(name: string, patients: Omit<Call, 'id' | 'status' | 'created_at'>[]): Promise<Campaign> {
     const campaignId = isSupabaseConfigured ? undefined : `camp_${Date.now()}`;
     const total = patients.length;

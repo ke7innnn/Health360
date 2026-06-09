@@ -12,7 +12,8 @@ import {
   PhoneCall, 
   RotateCcw,
   Sparkles,
-  Inbox
+  Inbox,
+  Trash2
 } from 'lucide-react';
 import { db, isSupabaseConfigured, subscribeToRealtime, Campaign } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,25 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [retryingFailed, setRetryingFailed] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteCampaign = async (campaignId: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete the campaign "${name}" and all associated patient calls? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setDeletingId(campaignId);
+      await db.deleteCampaign(campaignId);
+      toast.success(`Campaign "${name}" deleted successfully.`);
+      fetchCampaigns();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete campaign.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const fetchCampaigns = async () => {
     try {
@@ -170,8 +190,25 @@ export default function CampaignsPage() {
                 <div className="p-6 space-y-4">
                   {/* Card Header Info */}
                   <div className="flex justify-between items-start gap-2">
-                    <div className="p-2 bg-orange-50 text-[#f97316] rounded-xl shrink-0">
-                      <Megaphone className="h-5 w-5" />
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 bg-orange-50 text-[#f97316] rounded-xl shrink-0">
+                        <Megaphone className="h-5 w-5" />
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCampaign(camp.id, camp.name);
+                        }}
+                        disabled={deletingId === camp.id}
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-50"
+                        title="Delete Campaign"
+                      >
+                        {deletingId === camp.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-rose-500" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                     <div className="text-right">
                       {getCampaignStatus(camp)}

@@ -11,7 +11,8 @@ import {
   Clock, 
   RotateCcw,
   Sparkles,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { db, isSupabaseConfigured, subscribeToRealtime, Call, Campaign } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,25 @@ export default function CampaignTrackingPage() {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [retryingFailed, setRetryingFailed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteCampaign = async () => {
+    if (!campaign) return;
+    if (!window.confirm(`Are you sure you want to delete the campaign "${campaign.name}" and all associated patient calls? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await db.deleteCampaign(id);
+      toast.success(`Campaign "${campaign.name}" deleted successfully.`);
+      router.push('/campaigns');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete campaign.');
+      setDeleting(false);
+    }
+  };
 
   const fetchCampaignAndCalls = async () => {
     try {
@@ -148,18 +168,35 @@ export default function CampaignTrackingPage() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Campaigns
         </Button>
 
-        {failed > 0 && (
+        <div className="flex gap-2">
+          {failed > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors gap-2"
+              disabled={retryingFailed}
+              onClick={handleRetryFailed}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {retryingFailed ? 'Retrying...' : 'Retry Failed Calls'}
+            </Button>
+          )}
+
           <Button
             size="sm"
             variant="outline"
             className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors gap-2"
-            disabled={retryingFailed}
-            onClick={handleRetryFailed}
+            disabled={deleting}
+            onClick={handleDeleteCampaign}
           >
-            <RotateCcw className="h-4 w-4" />
-            {retryingFailed ? 'Retrying...' : 'Retry Failed Calls'}
+            {deleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            {deleting ? 'Deleting...' : 'Delete Campaign'}
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Campaign Status Master Card */}
