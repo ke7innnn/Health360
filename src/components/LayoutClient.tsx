@@ -1,0 +1,258 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { 
+  LayoutDashboard, 
+  Megaphone, 
+  Users, 
+  BarChart3, 
+  Activity, 
+  Bell, 
+  Database,
+  Menu,
+  X
+} from 'lucide-react';
+import { db, isSupabaseConfigured, subscribeToRealtime } from '@/lib/supabase';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<any>;
+}
+
+const navItems: NavItem[] = [
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+  { name: 'Patients / Calls', href: '/patients', icon: Users },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3 }
+];
+
+export default function LayoutClient({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [inProgressCount, setInProgressCount] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifications, setNotifications] = useState<string[]>([]);
+  const [showBellBadge, setShowBellBadge] = useState(false);
+
+  // Fetch active call count and subscribe to updates
+  useEffect(() => {
+    const fetchActiveCalls = async () => {
+      try {
+        const calls = await db.getCalls();
+        const active = calls.filter(c => c.status === 'in_progress').length;
+        setInProgressCount(active);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchActiveCalls();
+
+    // Subscribe to realtime updates (works for mock/Supabase)
+    let unsubscribe: () => void;
+    if (isSupabaseConfigured && db) {
+      // For Supabase
+      const channel = (db as any).supabase?.channel('layout-active-calls')
+        .on('postgres_changes', { event: '*', filter: 'status=eq.in_progress', table: 'calls' }, () => {
+          fetchActiveCalls();
+        })
+        .subscribe();
+      
+      unsubscribe = () => {
+        channel?.unsubscribe();
+      };
+    } else {
+      // For Local Mock
+      unsubscribe = subscribeToRealtime((payload) => {
+        if (payload.table === 'calls' || payload.table === 'all') {
+          fetchActiveCalls();
+          if (payload.event === 'UPDATE' && payload.record) {
+            const updatedCall = payload.record;
+            if (updatedCall.status === 'completed') {
+              toast.success(`Call completed: Patient ${updatedCall.patient_name}`, {
+                description: `Duration: ${updatedCall.duration_seconds}s | Sentiment: ${updatedCall.sentiment}`
+              });
+              setNotifications(prev => [`Call completed for ${updatedCall.patient_name} (${updatedCall.sentiment})`, ...prev.slice(0, 4)]);
+              setShowBellBadge(true);
+            } else if (updatedCall.status === 'failed') {
+              toast.error(`Call failed: Patient ${updatedCall.patient_name}`, {
+                description: `Patient did not answer the outbound call.`
+              });
+              setNotifications(prev => [`Call failed for ${updatedCall.patient_name}`, ...prev.slice(0, 4)]);
+              setShowBellBadge(true);
+            } else if (updatedCall.status === 'in_progress') {
+              toast.info(`Calling patient: ${updatedCall.patient_name}...`, {
+                description: `Type: ${updatedCall.patient_type}`
+              });
+            }
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Update document title
+  useEffect(() => {
+    if (inProgressCount > 0) {
+      document.title = `(${inProgressCount} calling) Health 360 Dashboard`;
+    } else {
+      document.title = 'Health 360 Dashboard';
+    }
+  }, [inProgressCount]);
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex">
+      {/* Sidebar for Mobile Layout */}
+      <div className={`fixed inset-0 z-50 lg:hidden transition-opacity duration-300 ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+        <div className="fixed inset-0 bg-slate-900/60" onClick={() => setSidebarOpen(false)} />
+        <div className={`fixed top-0 bottom-0 left-0 w-64 bg-[#0f172a] text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <Activity className="h-6 w-6 text-[#f97316] animate-pulse" />
+              <span className="font-bold text-lg tracking-wider">HEALTH 360</span>
+            </div>
+            <button className="text-slate-400 hover:text-white" onClick={() => setSidebarOpen(false)}>
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+          <nav className="flex-1 px-4 py-6 space-y-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                    isActive 
+                      ? 'bg-gradient-to-r from-orange-500/10 to-orange-600/20 text-[#f97316] border-l-4 border-[#f97316]' 
+                      : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
+                  }`}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      </div>
+
+      {/* Sidebar Desktop */}
+      <aside className="hidden lg:flex flex-col w-64 bg-[#0f172a] text-white shrink-0 fixed top-0 bottom-0 left-0 z-20">
+        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-tr from-orange-500 to-orange-600 rounded-lg">
+            <Activity className="h-5 w-5 text-white animate-pulse" />
+          </div>
+          <div>
+            <h1 className="font-bold text-md tracking-wider leading-none text-white">HEALTH 360</h1>
+            <span className="text-[10px] text-slate-400 font-semibold tracking-widest uppercase">Physiotherapy</span>
+          </div>
+        </div>
+
+        <nav className="flex-1 px-4 py-8 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                  isActive 
+                    ? 'bg-gradient-to-r from-orange-500/10 to-orange-600/20 text-[#f97316] border-l-4 border-[#f97316]' 
+                    : 'text-slate-300 hover:bg-slate-800/30 hover:text-white'
+                }`}
+              >
+                <item.icon className={`h-5 w-5 transition-transform duration-300 ${isActive ? 'scale-110 text-[#f97316]' : 'text-slate-400'}`} />
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="p-4 border-t border-slate-800">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold ${
+            isSupabaseConfigured ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+          }`}>
+            <Database className="h-4 w-4 shrink-0" />
+            <div className="overflow-hidden text-ellipsis whitespace-nowrap">
+              {isSupabaseConfigured ? 'Live Database Active' : 'Sandbox Simulator Active'}
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 lg:pl-64 flex flex-col min-h-screen">
+        {/* Top Navbar */}
+        <header className="h-16 bg-white border-b border-slate-200 shrink-0 sticky top-0 z-10 flex items-center justify-between px-6">
+          <div className="flex items-center gap-4">
+            <button className="lg:hidden text-slate-500 hover:text-slate-800" onClick={() => setSidebarOpen(true)}>
+              <Menu className="h-6 w-6" />
+            </button>
+            <h2 className="font-semibold text-lg text-slate-800">
+              Health 360 Physiotherapy Clinic
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Notification Bell */}
+            <div className="relative">
+              <button 
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+                onClick={() => {
+                  setShowBellBadge(false);
+                  if (notifications.length === 0) {
+                    toast.info("No new notifications.", { description: "Realtime updates are listening." });
+                  } else {
+                    toast.info("Latest events log", {
+                      description: (
+                        <div className="flex flex-col gap-1 mt-1 font-mono text-xs">
+                          {notifications.map((n, idx) => (
+                            <div key={idx} className="border-b border-slate-100 pb-1">
+                              • {n}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    });
+                  }
+                }}
+              >
+                <Bell className="h-5 w-5" />
+                {showBellBadge && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-[#f97316] ring-2 ring-white animate-bounce" />
+                )}
+              </button>
+            </div>
+
+            {/* Profile Avatar / Placeholder */}
+            <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
+              <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                Dr
+              </div>
+              <div className="hidden sm:block">
+                <p className="text-xs font-semibold text-slate-800 leading-none">Dr. Shinde, PT</p>
+                <p className="text-[10px] text-slate-400 font-medium">Lead Physiotherapist</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Content Wrapper */}
+        <main className="flex-grow p-6">
+          {children}
+        </main>
+      </div>
+      <Toaster position="top-right" richColors />
+    </div>
+  );
+}
