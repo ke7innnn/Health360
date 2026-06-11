@@ -21,20 +21,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full font-sans">
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var saved = localStorage.getItem('health360_theme');
-                  if (!saved) return;
-                  document.documentElement.classList.remove('dark', 'theme-sage', 'theme-blue', 'theme-ruby');
-                  if (saved !== 'light') document.documentElement.classList.add(saved);
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
         <LayoutClient>{children}</LayoutClient>
       </body>
     </html>

@@ -178,36 +178,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800 space-y-4">
-          <div>
-            <span className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase mb-2 block">
-              Theme
-            </span>
-            <div className="flex gap-2">
-              {[
-                { id: 'light', color: '#f8fafc', border: '#e2e8f0', title: 'Light' },
-                { id: 'dark', color: '#0f172a', border: '#334155', title: 'Dark' },
-                { id: 'theme-sage', color: '#dcfce7', border: '#22c55e', title: 'Sage Green' },
-                { id: 'theme-blue', color: '#dbeafe', border: '#3b82f6', title: 'Deep Blue' },
-                { id: 'theme-ruby', color: '#ffe4e6', border: '#f43f5e', title: 'Ruby Red' },
-              ].map(t => (
-                <button
-                  key={t.id}
-                  title={t.title}
-                  onClick={() => {
-                    const htmlClasses = document.documentElement.classList;
-                    htmlClasses.remove('dark', 'theme-sage', 'theme-blue', 'theme-ruby');
-                    if (t.id !== 'light') htmlClasses.add(t.id);
-                    localStorage.setItem('health360_theme', t.id);
-                    window.dispatchEvent(new Event('theme-changed'));
-                  }}
-                  className="w-6 h-6 rounded-full border border-slate-600 transition-transform hover:scale-110"
-                  style={{ backgroundColor: t.color, borderColor: t.border }}
-                />
-              ))}
-            </div>
-          </div>
-
+        <div className="p-4 border-t border-slate-800">
           <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold ${
             isSupabaseConfigured ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
           }`}>
