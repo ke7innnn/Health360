@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 
-const groqApiKey = process.env.GROQ_API_KEY || '';
-
 export async function POST(request: Request) {
   try {
+    const groqApiKey = process.env.GROQ_API_KEY || '';
     if (!groqApiKey) {
       return NextResponse.json(
         { error: 'Groq API Key is not configured. Please add GROQ_API_KEY to your environment variables.' },
