@@ -369,40 +369,41 @@ export const db = {
 
 
   async createCampaign(name: string, patients: Omit<Call, 'id' | 'status' | 'created_at'>[]): Promise<Campaign> {
-    const campaignId = isSupabaseConfigured ? undefined : `camp_${Date.now()}`;
-    const total = patients.length;
-    
-    let createdCampaign: Campaign;
-
     if (isSupabaseConfigured && supabase) {
-      // 1. Insert Campaign
-      const { data: campData, error: campErr } = await supabase
+      // Delegate everything to /api/start-campaign which:
+      //   1. Creates the campaign in Supabase
+      //   2. Inserts all call records as 'pending'
+      //   3. Fires first Retell call & saves retell_call_id immediately
+      const res = await fetch('/api/start-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, patients }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to start campaign');
+      }
+
+      const result = await res.json();
+
+      // Return the newly created campaign from Supabase
+      const { data: campData, error } = await supabase
         .from('campaigns')
-        .insert([{ name, total_patients: total, completed: 0, failed: 0, in_progress: 0 }])
-        .select()
+        .select('*')
+        .eq('id', result.campaign_id)
         .single();
-      
-      if (campErr) throw campErr;
-      createdCampaign = campData;
 
-      // 2. Insert Calls
-      const callsToInsert = patients.map(p => ({
-        campaign_id: createdCampaign.id,
-        patient_name: p.patient_name,
-        contact: p.contact,
-        age: p.age,
-        patient_type: p.patient_type,
-        context: p.context,
-        language: p.language || 'English',
-        status: 'pending'
-      }));
+      if (error || !campData) throw new Error('Campaign created but could not fetch it.');
+      return campData;
 
-      const { error: callsErr } = await supabase.from('calls').insert(callsToInsert);
-      if (callsErr) throw callsErr;
     } else {
-      // Local Mock Storage implementation
+      // ── Local mock mode (no Supabase) ─────────────────────────────────────
+      const campaignId = `camp_${Date.now()}`;
+      const total = patients.length;
+
       const newCamp: Campaign = {
-        id: campaignId!,
+        id: campaignId,
         name,
         total_patients: total,
         completed: 0,
@@ -431,25 +432,9 @@ export const db = {
       const calls = getLocalStorageData<Call[]>('h360_calls', []);
       setLocalStorageData('h360_calls', [...calls, ...newCalls]);
 
-      createdCampaign = newCamp;
       notifySubscribers('INSERT', 'campaigns', newCamp);
+      return newCamp;
     }
-
-    // Trigger n8n webhook proxy in background
-    // Build csv_data string matching n8n workflow format
-    const csvHeader = 'name,contact,age,patienttype,context';
-    const csvRows = patients.map(p =>
-      `${p.patient_name},${p.contact},${p.age},${p.patient_type},${p.context}`
-    ).join('\n');
-    const csvData = `${csvHeader}\n${csvRows}`;
-
-    fetch('/api/trigger-webhook', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csv_data: csvData })
-    }).catch(err => console.error('Failed to trigger webhook proxy:', err));
-
-    return createdCampaign;
   },
 
   async retryFailedCampaignCalls(campaignId: string): Promise<void> {
@@ -628,14 +613,23 @@ export const db = {
       }
     }
 
-    // Trigger n8n webhook proxy for single patient call
+    // Trigger via our direct Retell API (no n8n)
     if (callRecord) {
-      const singleCsvData = `name,contact,age,patienttype,context\n${callRecord.patient_name},${callRecord.contact},${callRecord.age},${callRecord.patient_type},${callRecord.context}`;
-      fetch('/api/trigger-webhook', {
+      fetch('/api/start-campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv_data: singleCsvData })
-      }).catch(err => console.error('Failed to trigger webhook proxy for single call:', err));
+        body: JSON.stringify({
+          name: `Retry: ${callRecord.patient_name}`,
+          patients: [{
+            patient_name: callRecord.patient_name,
+            contact: callRecord.contact,
+            age: callRecord.age,
+            patient_type: callRecord.patient_type,
+            context: callRecord.context,
+            language: callRecord.language,
+          }]
+        })
+      }).catch(err => console.error('Failed to trigger single call via start-campaign:', err));
     }
   },
 
@@ -669,13 +663,22 @@ export const db = {
       notifySubscribers('INSERT', 'calls', newCall);
     }
 
-    // Trigger n8n webhook proxy for single patient call
-    const newSingleCsvData = `name,contact,age,patienttype,context\n${newCall.patient_name},${newCall.contact},${newCall.age},${newCall.patient_type},${newCall.context}`;
-    fetch('/api/trigger-webhook', {
+    // Trigger via our direct Retell API (no n8n)
+    fetch('/api/start-campaign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csv_data: newSingleCsvData })
-    }).catch(err => console.error('Failed to trigger webhook proxy for new single call:', err));
+      body: JSON.stringify({
+        name: `Single Call: ${newCall.patient_name}`,
+        patients: [{
+          patient_name: newCall.patient_name,
+          contact: newCall.contact,
+          age: newCall.age,
+          patient_type: newCall.patient_type,
+          context: newCall.context,
+          language: newCall.language,
+        }]
+      })
+    }).catch(err => console.error('Failed to trigger single patient call:', err));
 
     return newCall;
   }
