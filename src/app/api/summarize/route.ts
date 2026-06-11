@@ -41,6 +41,7 @@ Return a clean, bulleted medical summary with these 3 short sections:
 - **Reported Symptoms & Pain**: (Any pain scale or stiffness reported)
 - **Next Steps & Appointments**: (Follow-up timing or instructions)
 
+Always output the summary in English, regardless of the language of the transcript (which may be in Hindi, Marathi, English, or a mix of languages).
 Be highly concise, professional, and clear. If a section is not mentioned in the transcript, state "Not discussed".`,
           },
           {
