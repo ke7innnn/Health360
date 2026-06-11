@@ -363,7 +363,7 @@ export default function PatientsPage() {
                   </Button>
                   <Button 
                     type="submit" 
-                    className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl h-9 text-xs font-bold gap-1.5"
+                    className="btn-glow-green rounded-xl h-9 text-xs font-bold gap-1.5"
                     disabled={isAddingPatient}
                   >
                     {isAddingPatient ? (
@@ -512,8 +512,7 @@ export default function PatientsPage() {
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className="text-sage-500 hover:bg-sage-50 rounded-xl h-8 px-2 font-bold text-xs gap-1"
+                          className="btn-glow-green rounded-xl h-8 px-3 font-bold text-xs gap-1"
                           disabled={callingState[call.id] || call.status === 'in_progress'}
                           onClick={() => handleCallPatient(call.id, call.patient_name)}
                         >

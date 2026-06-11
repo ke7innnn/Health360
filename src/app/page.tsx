@@ -244,8 +244,7 @@ export default function DashboardPage() {
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <Button
                             size="sm"
-                            variant="ghost"
-                            className="text-sage-500 hover:bg-sage-50 rounded-lg h-8 px-2 flex items-center gap-1.5"
+                            className="btn-glow-green rounded-xl h-8 px-3 flex items-center gap-1.5"
                             disabled={callingState[call.id] || call.status === 'in_progress'}
                             onClick={() => handleCallPatient(call.id, call.patient_name)}
                           >

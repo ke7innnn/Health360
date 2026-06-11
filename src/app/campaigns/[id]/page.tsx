@@ -365,8 +365,7 @@ export default function CampaignTrackingPage() {
                     <div onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="sm"
-                        variant="ghost"
-                        className="text-sage-500 hover:bg-sage-50 rounded-xl h-8 px-2 font-bold text-xs"
+                        className="btn-glow-green rounded-xl h-8 px-3 font-bold text-xs"
                         disabled={call.status === 'in_progress'}
                         onClick={() => handleSingleCall(call.id, call.patient_name)}
                       >
