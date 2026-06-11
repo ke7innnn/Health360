@@ -33,6 +33,43 @@ interface ParsedPatient {
   isValid: boolean;
 }
 
+// ─── Auto-fix phone numbers (handles Excel scientific notation like 9.187E+11) ──
+function sanitizePhone(raw: string): string {
+  if (!raw) return '';
+
+  let num = raw.toString().trim();
+
+  // Handle scientific notation from Excel: e.g. "9.187E+11" → "918700000000"
+  if (/\d+\.?\d*[eE][+\-]?\d+/.test(num)) {
+    num = Math.round(parseFloat(num)).toString();
+  }
+
+  // Strip everything except digits and leading +
+  num = num.replace(/[^\d+]/g, '');
+
+  // If it starts with 0, replace with +91
+  if (num.startsWith('0')) {
+    num = '+91' + num.slice(1);
+  }
+
+  // If it's 10 digits (Indian mobile without country code), add +91
+  if (/^\d{10}$/.test(num)) {
+    num = '+91' + num;
+  }
+
+  // If it's 12 digits starting with 91 (no +), add +
+  if (/^91\d{10}$/.test(num)) {
+    num = '+' + num;
+  }
+
+  // Ensure it starts with + for E.164 format
+  if (!num.startsWith('+') && num.length > 0) {
+    num = '+' + num;
+  }
+
+  return num;
+}
+
 export default function NewCampaignPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +107,8 @@ export default function NewCampaignPage() {
         const parsed: ParsedPatient[] = results.data.map((row: any) => {
           // Normalize keys (case insensitive / whitespace trimming)
           const name = row.Name || row.name || row['Patient Name'] || '';
-          const contact = row.Contact || row.contact || row.Phone || row.phone || '';
+          const rawContact = row.Contact || row.contact || row.Phone || row.phone || '';
+          const contact = sanitizePhone(rawContact); // auto-fix scientific notation, missing +91, etc.
           const age = row.Age || row.age || '';
           const patientType = row['Patient Type'] || row.patient_type || row.Type || row.type || 'General';
           const context = row.Context || row.context || '';
