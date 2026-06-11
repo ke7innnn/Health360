@@ -257,7 +257,7 @@ export default function PatientsPage() {
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger 
             render={
-              <Button className="bg-[#f97316] hover:bg-orange-600 text-white rounded-xl shadow-md gap-2 text-xs font-bold">
+              <Button className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl shadow-md gap-2 text-xs font-bold">
                 <Plus className="h-4 w-4" /> Quick Call Patient
               </Button>
             }
@@ -265,7 +265,7 @@ export default function PatientsPage() {
             <DialogContent className="rounded-3xl border-slate-200 max-w-md bg-white">
               <DialogHeader>
                 <DialogTitle className="text-slate-800 font-bold flex items-center gap-1.5">
-                  Single Check-in Dialer <Sparkles className="h-4 w-4 text-[#f97316]" />
+                  Single Check-in Dialer <Sparkles className="h-4 w-4 text-sage-500" />
                 </DialogTitle>
                 <DialogDescription className="text-slate-400 text-xs">
                   Create a new patient entry and initiate a custom check-in call immediately.
@@ -280,7 +280,7 @@ export default function PatientsPage() {
                       placeholder="e.g. Ashok Kumar" 
                       value={newPatient.patient_name}
                       onChange={(e) => setNewPatient(prev => ({ ...prev, patient_name: e.target.value }))}
-                      className="rounded-xl border-slate-200 focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] text-xs h-9"
+                      className="rounded-xl border-slate-200 focus:border-sage-500 focus:ring-1 focus:ring-sage-500 text-xs h-9"
                     />
                   </div>
                   <div className="space-y-1">
@@ -289,7 +289,7 @@ export default function PatientsPage() {
                       placeholder="e.g. +91 99000 88000" 
                       value={newPatient.contact}
                       onChange={(e) => setNewPatient(prev => ({ ...prev, contact: e.target.value }))}
-                      className="rounded-xl border-slate-200 focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] text-xs h-9"
+                      className="rounded-xl border-slate-200 focus:border-sage-500 focus:ring-1 focus:ring-sage-500 text-xs h-9"
                     />
                   </div>
                 </div>
@@ -301,7 +301,7 @@ export default function PatientsPage() {
                       placeholder="e.g. 52" 
                       value={newPatient.age}
                       onChange={(e) => setNewPatient(prev => ({ ...prev, age: e.target.value }))}
-                      className="rounded-xl border-slate-200 focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] text-xs h-9"
+                      className="rounded-xl border-slate-200 focus:border-sage-500 focus:ring-1 focus:ring-sage-500 text-xs h-9"
                     />
                   </div>
                   <div className="space-y-1">
@@ -310,7 +310,7 @@ export default function PatientsPage() {
                       value={newPatient.language} 
                       onValueChange={(val) => setNewPatient(prev => ({ ...prev, language: val || 'English' }))}
                     >
-                      <SelectTrigger className="rounded-xl border-slate-200 focus:border-[#f97316] text-xs h-9">
+                      <SelectTrigger className="rounded-xl border-slate-200 focus:border-sage-500 text-xs h-9">
                         <SelectValue placeholder="English" />
                       </SelectTrigger>
                       <SelectContent className="bg-white border-slate-200">
@@ -328,7 +328,7 @@ export default function PatientsPage() {
                     value={newPatient.patient_type} 
                     onValueChange={(val) => setNewPatient(prev => ({ ...prev, patient_type: val || 'Knee Pain' }))}
                   >
-                    <SelectTrigger className="rounded-xl border-slate-200 focus:border-[#f97316] text-xs h-9">
+                    <SelectTrigger className="rounded-xl border-slate-200 focus:border-sage-500 text-xs h-9">
                       <SelectValue placeholder="Knee Pain" />
                     </SelectTrigger>
                     <SelectContent className="bg-white border-slate-200">
@@ -348,7 +348,7 @@ export default function PatientsPage() {
                     placeholder="e.g. Ask if swelling in knee went down after using ice pack twice a day." 
                     value={newPatient.context}
                     onChange={(e) => setNewPatient(prev => ({ ...prev, context: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] text-xs p-3 outline-none"
+                    className="w-full rounded-xl border border-slate-200 focus:border-sage-500 focus:ring-1 focus:ring-sage-500 text-xs p-3 outline-none"
                   />
                 </div>
 
@@ -363,7 +363,7 @@ export default function PatientsPage() {
                   </Button>
                   <Button 
                     type="submit" 
-                    className="bg-[#f97316] hover:bg-orange-600 text-white rounded-xl h-9 text-xs font-bold gap-1.5"
+                    className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl h-9 text-xs font-bold gap-1.5"
                     disabled={isAddingPatient}
                   >
                     {isAddingPatient ? (
@@ -393,7 +393,7 @@ export default function PatientsPage() {
               placeholder="Search patient name or phone..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 rounded-xl border-slate-200 focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] text-xs"
+              className="pl-9 rounded-xl border-slate-200 focus:border-sage-500 focus:ring-1 focus:ring-sage-500 text-xs"
             />
             {searchTerm && (
               <button 
@@ -513,7 +513,7 @@ export default function PatientsPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-[#f97316] hover:bg-orange-50 rounded-xl h-8 px-2 font-bold text-xs gap-1"
+                          className="text-sage-500 hover:bg-sage-50 rounded-xl h-8 px-2 font-bold text-xs gap-1"
                           disabled={callingState[call.id] || call.status === 'in_progress'}
                           onClick={() => handleCallPatient(call.id, call.patient_name)}
                         >

@@ -116,7 +116,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
         <div className={`fixed top-0 bottom-0 left-0 w-64 bg-[#0f172a] text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="p-6 border-b border-slate-800 flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <Activity className="h-6 w-6 text-[#f97316] animate-pulse" />
+              <Activity className="h-6 w-6 text-sage-500 animate-pulse" />
               <span className="font-bold text-lg tracking-wider">HEALTH 360</span>
             </div>
             <button className="text-slate-400 hover:text-white" onClick={() => setSidebarOpen(false)}>
@@ -133,7 +133,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
                   onClick={() => setSidebarOpen(false)}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                     isActive 
-                      ? 'bg-gradient-to-r from-orange-500/10 to-orange-600/20 text-[#f97316] border-l-4 border-[#f97316]' 
+                      ? 'bg-gradient-to-r from-sage-500/10 to-sage-600/20 text-sage-600 border-l-4 border-sage-500' 
                       : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
                   }`}
                 >
@@ -149,7 +149,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
       {/* Sidebar Desktop */}
       <aside className="hidden lg:flex flex-col w-64 bg-[#0f172a] text-white shrink-0 fixed top-0 bottom-0 left-0 z-20">
         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-tr from-orange-500 to-orange-600 rounded-lg">
+          <div className="p-2 bg-gradient-to-tr from-sage-500 to-sage-600 rounded-lg">
             <Activity className="h-5 w-5 text-white animate-pulse" />
           </div>
           <div>
@@ -167,11 +167,11 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
                 href={item.href}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                   isActive 
-                    ? 'bg-gradient-to-r from-orange-500/10 to-orange-600/20 text-[#f97316] border-l-4 border-[#f97316]' 
+                    ? 'bg-gradient-to-r from-sage-500/10 to-sage-600/20 text-sage-600 border-l-4 border-sage-500' 
                     : 'text-slate-300 hover:bg-slate-800/30 hover:text-white'
                 }`}
               >
-                <item.icon className={`h-5 w-5 transition-transform duration-300 ${isActive ? 'scale-110 text-[#f97316]' : 'text-slate-400'}`} />
+                <item.icon className={`h-5 w-5 transition-transform duration-300 ${isActive ? 'scale-110 text-sage-500' : 'text-slate-400'}`} />
                 {item.name}
               </Link>
             );
@@ -229,7 +229,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
               >
                 <Bell className="h-5 w-5" />
                 {showBellBadge && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-[#f97316] ring-2 ring-white animate-bounce" />
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-sage-500 ring-2 ring-white animate-bounce" />
                 )}
               </button>
             </div>

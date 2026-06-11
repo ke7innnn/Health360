@@ -162,7 +162,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            Physiotherapy Calling Desk <Sparkles className="h-5 w-5 text-[#f97316]" />
+            Physiotherapy Calling Desk <Sparkles className="h-5 w-5 text-sage-500" />
           </h1>
           <p className="text-sm text-slate-500">
             Realtime campaign summaries and patient outbound response metrics.
@@ -170,7 +170,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-3">
           <Button 
-            className="bg-[#f97316] hover:bg-orange-600 text-white rounded-xl shadow-md gap-2"
+            className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl shadow-md gap-2"
             onClick={() => router.push('/campaigns/new')}
           >
             <PhoneCall className="h-4 w-4" />
@@ -198,7 +198,7 @@ export default function DashboardPage() {
               <CardTitle className="text-md font-bold text-slate-800">Recent Outbound Activity</CardTitle>
               <CardDescription className="text-xs text-slate-400">Click any patient row to review detailed AI logs & call audio.</CardDescription>
             </div>
-            <Link href="/patients" className="text-xs font-semibold text-[#f97316] hover:text-orange-600 flex items-center gap-1">
+            <Link href="/patients" className="text-xs font-semibold text-sage-500 hover:text-sage-600 flex items-center gap-1">
               View All <ChevronRight className="h-4 w-4" />
             </Link>
           </CardHeader>
@@ -245,7 +245,7 @@ export default function DashboardPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-[#f97316] hover:bg-orange-50 rounded-lg h-8 px-2 flex items-center gap-1.5"
+                            className="text-sage-500 hover:bg-sage-50 rounded-lg h-8 px-2 flex items-center gap-1.5"
                             disabled={callingState[call.id] || call.status === 'in_progress'}
                             onClick={() => handleCallPatient(call.id, call.patient_name)}
                           >

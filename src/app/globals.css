@@ -46,6 +46,13 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  --color-sage-50: #f3f6f3;
+  --color-sage-100: #e3eae2;
+  --color-sage-200: #cbd5ca;
+  --color-sage-500: #879882;
+  --color-sage-600: #71826d;
+  --color-sage-700: #5b6a58;
 }
 
 :root {

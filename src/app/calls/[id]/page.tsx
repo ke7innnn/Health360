@@ -98,7 +98,7 @@ export default function CallDetailPage() {
       <div className="flex flex-col items-center justify-center p-12 text-center h-[50vh]">
         <h3 className="font-bold text-slate-700 text-lg">Call Log Not Found</h3>
         <p className="text-xs text-slate-400 mt-1 mb-6">The patient call check-in record does not exist.</p>
-        <Button onClick={() => router.push('/')} className="bg-[#f97316] text-white rounded-xl">
+        <Button onClick={() => router.push('/')} className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl">
           Back to Dashboard
         </Button>
       </div>
@@ -125,7 +125,7 @@ export default function CallDetailPage() {
         </Button>
 
         <Button
-          className="bg-[#f97316] hover:bg-orange-600 text-white rounded-xl shadow-md gap-2"
+          className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl shadow-md gap-2"
           disabled={callingAgain || call.status === 'in_progress'}
           onClick={handleCallAgain}
         >
@@ -146,8 +146,8 @@ export default function CallDetailPage() {
           {/* Audio recording player */}
           {call.recording_url && (
             <Card className="rounded-3xl border-slate-200 bg-white shadow-sm overflow-hidden shrink-0">
-              <CardContent className="p-5 flex flex-col sm:flex-row items-center gap-4 bg-gradient-to-tr from-slate-50 to-orange-50/10">
-                <div className="p-3 bg-orange-100 text-[#f97316] rounded-full shrink-0">
+              <CardContent className="p-5 flex flex-col sm:flex-row items-center gap-4 bg-gradient-to-tr from-slate-50 to-sage-50/10">
+                <div className="p-3 bg-sage-100 text-sage-700 rounded-full shrink-0">
                   <Volume2 className="h-6 w-6" />
                 </div>
                 <div className="flex-1 w-full text-center sm:text-left">
@@ -158,7 +158,7 @@ export default function CallDetailPage() {
                   <audio 
                     src={call.recording_url} 
                     controls 
-                    className="w-full h-9 rounded-xl outline-none focus:ring-2 focus:ring-[#f97316] custom-audio"
+                    className="w-full h-9 rounded-xl outline-none focus:ring-2 focus:ring-sage-500 custom-audio"
                   />
                 </div>
               </CardContent>

@@ -197,7 +197,7 @@ export default function NewCampaignPage() {
 
       // Trigger Confetti!
       const end = Date.now() + (2.5 * 1000);
-      const colors = ['#f97316', '#0f172a', '#10b981'];
+      const colors = ['#879882', '#0f172a', '#10b981'];
 
       (function frame() {
         confetti({
@@ -269,10 +269,10 @@ export default function NewCampaignPage() {
 
       {patients.length === 0 ? (
         /* CSV Drop Zone */
-        <Card className="rounded-3xl border-2 border-dashed border-slate-200 bg-white hover:border-[#f97316]/50 transition-colors shadow-sm">
+        <Card className="rounded-3xl border-2 border-dashed border-slate-200 bg-white hover:border-sage-500/50 transition-colors shadow-sm">
           <CardContent 
             className={`p-12 flex flex-col items-center justify-center text-center cursor-pointer ${
-              isDragOver ? 'bg-orange-50/20' : ''
+              isDragOver ? 'bg-sage-50/20' : ''
             }`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -286,14 +286,14 @@ export default function NewCampaignPage() {
               accept=".csv"
               onChange={handleFileChange}
             />
-            <div className="p-4 bg-orange-50 text-[#f97316] rounded-full mb-4 animate-pulse">
+            <div className="p-4 bg-sage-50 text-sage-600 rounded-full mb-4 animate-pulse">
               <Upload className="h-8 w-8" />
             </div>
             <h3 className="font-bold text-slate-800 text-lg">Drop your patient CSV here</h3>
             <p className="text-xs text-slate-400 max-w-xs mt-1 mb-6">
               Or click to search your files. Make sure columns contain Name and Contact number.
             </p>
-            <Button className="bg-[#f97316] hover:bg-orange-600 text-white rounded-xl shadow-md">
+            <Button className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl shadow-md">
               Choose CSV File
             </Button>
           </CardContent>
@@ -308,7 +308,7 @@ export default function NewCampaignPage() {
                 <CardDescription className="text-xs text-slate-400">Review patients found before dialer launch.</CardDescription>
               </div>
               <div className="flex items-center gap-3">
-                <Badge className="bg-orange-100 text-[#f97316] hover:bg-orange-100 border border-orange-200">
+                <Badge className="bg-sage-100 text-sage-700 hover:bg-sage-100 border border-sage-200">
                   {patients.length} patients found
                 </Badge>
                 <Button 
@@ -385,13 +385,13 @@ export default function NewCampaignPage() {
                   placeholder="e.g. Back Pain Call Check - Week 2" 
                   value={campaignName}
                   onChange={(e) => setCampaignName(e.target.value)}
-                  className="rounded-xl border-slate-200 focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316]"
+                  className="rounded-xl border-slate-200 focus:border-sage-500 focus:ring-1 focus:ring-sage-500"
                 />
               </div>
 
               <div className="pt-2 flex justify-end">
                 <Button 
-                  className="bg-[#f97316] hover:bg-orange-600 text-white rounded-xl shadow-md px-6 gap-2"
+                  className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl shadow-md px-6 gap-2"
                   onClick={handleLaunchCampaign}
                   disabled={isLaunching || hasInvalidRows || !campaignName.trim()}
                 >

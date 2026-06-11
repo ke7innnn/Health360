@@ -159,7 +159,7 @@ export default function CampaignTrackingPage() {
       <div className="flex flex-col items-center justify-center p-12 text-center h-[50vh]">
         <h3 className="font-bold text-slate-700 text-lg">Campaign not found</h3>
         <p className="text-xs text-slate-400 mt-1 mb-6">The campaign id you are trying to track doesn't exist.</p>
-        <Button onClick={() => router.push('/campaigns')} className="bg-[#f97316] text-white rounded-xl">
+        <Button onClick={() => router.push('/campaigns')} className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl">
           View All Campaigns
         </Button>
       </div>
@@ -224,14 +224,14 @@ export default function CampaignTrackingPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-[#f97316] uppercase tracking-widest bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100">Live Campaign</span>
+                <span className="text-[10px] font-bold text-sage-600 uppercase tracking-widest bg-sage-50 px-2 py-0.5 rounded-full border border-sage-100">Live Campaign</span>
                 <span className="text-xs text-slate-400 font-medium">Launched {new Date(campaign.created_at).toLocaleDateString()}</span>
               </div>
               <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight mt-1">{campaign.name}</h1>
             </div>
             
             <div className="text-left md:text-right">
-              <span className="text-3xl font-extrabold text-[#f97316] tracking-tight">{progressPercent}%</span>
+              <span className="text-3xl font-extrabold text-sage-500 tracking-tight">{progressPercent}%</span>
               <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Progress Rate</p>
             </div>
           </div>
@@ -245,7 +245,7 @@ export default function CampaignTrackingPage() {
                 </span>
               )}
             </div>
-            <Progress value={progressPercent} className="h-3 bg-slate-100 [&>div]:bg-gradient-to-r [&>div]:from-orange-500 [&>div]:to-orange-600 rounded-full" />
+            <Progress value={progressPercent} className="h-3 bg-slate-100 [&>div]:bg-gradient-to-r [&>div]:from-sage-500 [&>div]:to-sage-600 rounded-full" />
           </div>
         </CardContent>
       </Card>
@@ -299,7 +299,7 @@ export default function CampaignTrackingPage() {
       <div>
         <h2 className="text-md font-bold text-slate-800 mb-4 flex items-center gap-1.5">
           Patient Call Roster
-          <Sparkles className="h-4 w-4 text-[#f97316]" />
+          <Sparkles className="h-4 w-4 text-sage-500" />
         </h2>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -366,7 +366,7 @@ export default function CampaignTrackingPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-[#f97316] hover:bg-orange-50 rounded-xl h-8 px-2 font-bold text-xs"
+                        className="text-sage-500 hover:bg-sage-50 rounded-xl h-8 px-2 font-bold text-xs"
                         disabled={call.status === 'in_progress'}
                         onClick={() => handleSingleCall(call.id, call.patient_name)}
                       >

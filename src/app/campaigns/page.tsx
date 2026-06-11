@@ -153,7 +153,7 @@ export default function CampaignsPage() {
             </Button>
           )}
           <Button 
-            className="bg-[#f97316] hover:bg-orange-600 text-white rounded-xl shadow-md gap-2"
+            className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl shadow-md gap-2"
             onClick={() => router.push('/campaigns/new')}
           >
             <Sparkles className="h-4 w-4" />
@@ -169,7 +169,7 @@ export default function CampaignsPage() {
           <p className="text-xs text-slate-400 max-w-xs mt-1 mb-6">Create your first automated roster campaign to begin.</p>
           <Button 
             onClick={() => router.push('/campaigns/new')} 
-            className="bg-[#f97316] hover:bg-orange-600 text-white rounded-xl"
+            className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl"
           >
             Create New Campaign
           </Button>
@@ -191,7 +191,7 @@ export default function CampaignsPage() {
                   {/* Card Header Info */}
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex items-center gap-2">
-                      <div className="p-2 bg-orange-50 text-[#f97316] rounded-xl shrink-0">
+                      <div className="p-2 bg-sage-50 text-sage-600 rounded-xl shrink-0">
                         <Megaphone className="h-5 w-5" />
                       </div>
                       <button
@@ -216,7 +216,7 @@ export default function CampaignsPage() {
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-slate-800 tracking-tight leading-snug truncate group-hover:text-[#f97316] transition-colors">
+                    <h3 className="font-bold text-slate-800 tracking-tight leading-snug truncate group-hover:text-sage-600 transition-colors">
                       {camp.name}
                     </h3>
                     <div className="flex items-center gap-1.5 text-slate-400 text-xs mt-1 font-semibold">
@@ -251,7 +251,7 @@ export default function CampaignsPage() {
                     </span>
                     <span>{progress}%</span>
                   </div>
-                  <Progress value={progress} className="h-2 bg-slate-100 [&>div]:bg-[#f97316] rounded-full" />
+                  <Progress value={progress} className="h-2 bg-slate-100 [&>div]:bg-sage-500 rounded-full" />
                 </div>
               </Card>
             );

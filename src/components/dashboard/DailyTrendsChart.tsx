@@ -47,7 +47,7 @@ export default function DailyTrendsChart({ calls }: DailyTrendsChartProps) {
       <CardHeader className="p-6 border-b border-slate-100 pb-3">
         <CardTitle className="text-sm font-bold text-slate-800 flex items-center justify-between">
           7-Day Call Volume
-          <TrendingUp className="h-4 w-4 text-[#f97316]" />
+          <TrendingUp className="h-4 w-4 text-sage-500" />
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4">
@@ -73,7 +73,7 @@ export default function DailyTrendsChart({ calls }: DailyTrendsChartProps) {
                 type="monotone" 
                 dataKey="count" 
                 name="Calls Made"
-                stroke="#f97316" 
+                stroke="#879882" 
                 strokeWidth={3} 
                 activeDot={{ r: 6 }} 
                 dot={{ r: 3, strokeWidth: 2 }}

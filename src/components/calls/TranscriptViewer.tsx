@@ -92,7 +92,7 @@ export default function TranscriptViewer({ status, transcript }: TranscriptViewe
                   <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 shadow-sm ${
                     isAgent 
                       ? 'bg-slate-900 border-slate-800 text-white' 
-                      : 'bg-orange-100 border-orange-200 text-[#f97316]'
+                      : 'bg-sage-100 border-sage-200 text-sage-700'
                   }`}>
                     {isAgent ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
                   </div>
@@ -101,7 +101,7 @@ export default function TranscriptViewer({ status, transcript }: TranscriptViewe
                   <div className={`p-4 rounded-2xl text-xs font-semibold leading-relaxed shadow-sm ${
                     isAgent 
                       ? 'bg-white border border-slate-200 text-slate-800 rounded-tl-none' 
-                      : 'bg-[#ffedd5] border border-orange-100 text-slate-800 rounded-tr-none'
+                      : 'bg-sage-50 border border-sage-100 text-slate-800 rounded-tr-none'
                   }`}>
                     <p>{msg.text}</p>
                   </div>

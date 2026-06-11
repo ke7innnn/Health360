@@ -144,7 +144,7 @@ export default function AnalyticsPage() {
       }
     });
 
-    const colors = ['#f97316', '#3b82f6', '#10b981'];
+    const colors = ['#879882', '#3b82f6', '#10b981'];
     return Object.entries(langs).map(([name, value], idx) => ({
       name,
       value,
@@ -220,7 +220,7 @@ export default function AnalyticsPage() {
               <p className="text-[10px] text-slate-400 font-semibold">Made this calendar month</p>
             </div>
             <div className="flex flex-col items-end gap-1">
-              <div className="p-2.5 bg-orange-50 text-[#f97316] rounded-xl"><Phone className="h-5 w-5" /></div>
+              <div className="p-2.5 bg-sage-50 text-sage-600 rounded-xl"><Phone className="h-5 w-5" /></div>
               {monthlyStats.pctChange !== 0 && (
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 ${
                   monthlyStats.pctChange > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
@@ -267,7 +267,7 @@ export default function AnalyticsPage() {
           <CardHeader className="p-6 border-b border-slate-100">
             <CardTitle className="text-sm font-bold text-slate-800 flex items-center justify-between">
               Answered Languages
-              <Award className="h-4 w-4 text-[#f97316]" />
+              <Award className="h-4 w-4 text-sage-500" />
             </CardTitle>
             <CardDescription className="text-xs text-slate-400">Distribution of successful patient check-ins by call language.</CardDescription>
           </CardHeader>
@@ -315,7 +315,7 @@ export default function AnalyticsPage() {
           <CardHeader className="p-6 border-b border-slate-100">
             <CardTitle className="text-sm font-bold text-slate-800 flex items-center justify-between">
               Condition Call Volume
-              <Activity className="h-4 w-4 text-[#f97316]" />
+              <Activity className="h-4 w-4 text-sage-500" />
             </CardTitle>
             <CardDescription className="text-xs text-slate-400">Total check-in call volume categorized by physical injury type.</CardDescription>
           </CardHeader>
@@ -352,7 +352,7 @@ export default function AnalyticsPage() {
                     <Bar 
                       dataKey="count" 
                       name="Patient Calls"
-                      fill="#f97316" 
+                      fill="#879882" 
                       radius={[0, 6, 6, 0]} 
                       maxBarSize={25}
                     />
@@ -370,7 +370,7 @@ export default function AnalyticsPage() {
         <CardHeader className="p-6 border-b border-slate-100">
           <CardTitle className="text-sm font-bold text-slate-800 flex items-center justify-between">
             Hourly Response Effectiveness
-            <Calendar className="h-4 w-4 text-[#f97316]" />
+            <Calendar className="h-4 w-4 text-sage-500" />
           </CardTitle>
           <CardDescription className="text-xs text-slate-400">Review patient connection answers by the hour of outbound dialing.</CardDescription>
         </CardHeader>
