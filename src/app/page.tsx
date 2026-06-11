@@ -10,7 +10,7 @@ import {
   Sparkles,
   Inbox
 } from 'lucide-react';
-import { db, isSupabaseConfigured, subscribeToRealtime, Call, Campaign } from '@/lib/supabase';
+import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Call, Campaign } from '@/lib/supabase';
 import StatsGrid from '@/components/dashboard/StatsGrid';
 import CallSuccessChart from '@/components/dashboard/CallSuccessChart';
 import DailyTrendsChart from '@/components/dashboard/DailyTrendsChart';
@@ -43,21 +43,29 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchData();
 
-    // Set up Realtime subscriptions (Mock or Supabase)
-    let unsubscribe: () => void;
-    if (isSupabaseConfigured && db) {
-      const channel = (db as any).supabase?.channel('dashboard-changes')
-        .on('postgres_changes', { event: '*', table: 'calls' }, () => {
-          fetchData();
-        })
-        .on('postgres_changes', { event: '*', table: 'campaigns' }, () => {
-          fetchData();
-        })
-        .subscribe();
-      
-      unsubscribe = () => {
-        channel?.unsubscribe();
-      };
+    let unsubscribe: (() => void) | undefined;
+
+    if (isSupabaseConfigured && supabase) {
+      // Use the actual supabase client — (db as any).supabase is always undefined
+      const channel = supabase
+        .channel('dashboard-changes')
+        .on(
+          'postgres_changes' as any,
+          { event: '*', schema: 'public', table: 'calls' },
+          () => { fetchData(); }
+        )
+        .on(
+          'postgres_changes' as any,
+          { event: '*', schema: 'public', table: 'campaigns' },
+          () => { fetchData(); }
+        )
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('[Realtime] Dashboard subscribed to changes.');
+          }
+        });
+
+      unsubscribe = () => { channel.unsubscribe(); };
     } else {
       unsubscribe = subscribeToRealtime((payload) => {
         if (payload.table === 'calls' || payload.table === 'campaigns' || payload.table === 'all') {
@@ -66,8 +74,12 @@ export default function DashboardPage() {
       });
     }
 
+    // Polling fallback every 10s for resilience
+    const pollInterval = setInterval(() => { fetchData(); }, 10000);
+
     return () => {
       if (unsubscribe) unsubscribe();
+      clearInterval(pollInterval);
     };
   }, []);
 

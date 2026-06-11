@@ -14,7 +14,7 @@ import {
   Loader2,
   Trash2
 } from 'lucide-react';
-import { db, isSupabaseConfigured, subscribeToRealtime, Call, Campaign } from '@/lib/supabase';
+import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Call, Campaign } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -66,31 +66,50 @@ export default function CampaignTrackingPage() {
   useEffect(() => {
     fetchCampaignAndCalls();
 
-    // Subscribe to realtime database changes (Mock or Supabase)
-    let unsubscribe: () => void;
-    if (isSupabaseConfigured && db) {
-      const channel = (db as any).supabase?.channel(`campaign-track-${id}`)
-        .on('postgres_changes', { event: '*', table: 'calls', filter: `campaign_id=eq.${id}` }, () => {
-          fetchCampaignAndCalls();
-        })
-        .on('postgres_changes', { event: '*', table: 'campaigns', filter: `id=eq.${id}` }, () => {
-          fetchCampaignAndCalls();
-        })
-        .subscribe();
+    let unsubscribe: (() => void) | undefined;
 
-      unsubscribe = () => {
-        channel?.unsubscribe();
-      };
+    if (isSupabaseConfigured && supabase) {
+      // Use the actual supabase client for realtime — NOT (db as any).supabase which is undefined
+      const channel = supabase
+        .channel(`campaign-track-${id}`)
+        .on(
+          'postgres_changes' as any,
+          { event: '*', schema: 'public', table: 'calls', filter: `campaign_id=eq.${id}` },
+          () => { fetchCampaignAndCalls(); }
+        )
+        .on(
+          'postgres_changes' as any,
+          { event: '*', schema: 'public', table: 'campaigns', filter: `id=eq.${id}` },
+          () => { fetchCampaignAndCalls(); }
+        )
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`[Realtime] Subscribed to campaign-track-${id}`);
+          }
+        });
+
+      unsubscribe = () => { channel.unsubscribe(); };
     } else {
+      // Mock/local storage realtime
       unsubscribe = subscribeToRealtime((payload) => {
-        if (payload.table === 'all' || (payload.table === 'calls' && payload.record?.campaign_id === id) || (payload.table === 'campaigns' && payload.record?.id === id)) {
+        if (
+          payload.table === 'all' ||
+          (payload.table === 'calls' && payload.record?.campaign_id === id) ||
+          (payload.table === 'campaigns' && payload.record?.id === id)
+        ) {
           fetchCampaignAndCalls();
         }
       });
     }
 
+    // Polling fallback: refresh every 8 seconds in case realtime misses an event
+    const pollInterval = setInterval(() => {
+      fetchCampaignAndCalls();
+    }, 8000);
+
     return () => {
       if (unsubscribe) unsubscribe();
+      clearInterval(pollInterval);
     };
   }, [id]);
 
