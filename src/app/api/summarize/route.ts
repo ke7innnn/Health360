@@ -34,15 +34,11 @@ export async function POST(request: Request) {
         messages: [
           {
             role: 'system',
-            content: `You are an expert physiotherapy clinical assistant. 
-Summarize the patient check-in call transcript.
-Return a clean, bulleted medical summary with these 3 short sections:
-- **Patient Recovery Status**: (Overall recovery state, exercise compliance)
-- **Reported Symptoms & Pain**: (Any pain scale or stiffness reported)
-- **Next Steps & Appointments**: (Follow-up timing or instructions)
-
-Always output the summary in English, regardless of the language of the transcript (which may be in Hindi, Marathi, English, or a mix of languages).
-Be highly concise, professional, and clear. If a section is not mentioned in the transcript, state "Not discussed".`,
+            content: `Physio clinical assistant. Summarize call transcript in English only. Output exactly:
+- **Patient Recovery Status**: (compliance & state)
+- **Reported Symptoms & Pain**: (pain/stiffness)
+- **Next Steps & Appointments**: (follow-ups)
+Be concise. Write "Not discussed" if missing.`,
           },
           {
             role: 'user',
