@@ -12,11 +12,26 @@ import {
   Bell, 
   Database,
   Menu,
-  X
+  X,
+  User,
+  Lock,
+  Eye,
+  EyeOff,
+  Loader2,
+  LogOut
 } from 'lucide-react';
 import { db, isSupabaseConfigured, subscribeToRealtime } from '@/lib/supabase';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+
+// Helper to hash string using SHA-256
+async function sha256(message: string): Promise<string> {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
 
 interface NavItem {
   name: string;
@@ -37,6 +52,58 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
   const [showBellBadge, setShowBellBadge] = useState(false);
+
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+
+  // Check auth on mount
+  useEffect(() => {
+    const auth = localStorage.getItem('health360_auth');
+    if (auth === 'true') {
+      setIsAuthenticated(true);
+    }
+    setCheckingAuth(false);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('health360_auth');
+    setIsAuthenticated(false);
+    toast.success('Logged out successfully.');
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginUsername || !loginPassword) {
+      toast.warning('Please enter both ID and password.');
+      return;
+    }
+
+    setIsValidating(true);
+    try {
+      const credentialsHash = await sha256(`${loginUsername}:${loginPassword}`);
+      if (credentialsHash === '5239c6756fa8614fd544a776790a8d00f76607f6b58057dda96e8141ab320774') {
+        localStorage.setItem('health360_auth', 'true');
+        setIsAuthenticated(true);
+        toast.success('Welcome back, Admin!', {
+          description: 'Access granted to Health 360 Dashboard.',
+        });
+      } else {
+        toast.error('Invalid credentials', {
+          description: 'Please check your ID and Password.',
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Authentication error occurred.');
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   // Fetch active call count and subscribe to updates
   useEffect(() => {
@@ -107,6 +174,101 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
       document.title = 'Health 360 Dashboard';
     }
   }, [inProgressCount]);
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Activity className="h-10 w-10 text-sage-500 animate-pulse" />
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">
+            Verifying Session...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-[#0f172a] to-emerald-950/40 flex items-center justify-center p-4">
+        <div className="relative w-full max-w-md">
+          {/* Decorative Background Glows */}
+          <div className="absolute -top-10 -left-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-sage-500/10 rounded-full blur-3xl" />
+
+          {/* Form Card */}
+          <div className="backdrop-blur-xl bg-slate-900/60 border border-slate-800/80 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col items-center mb-8">
+              <div className="p-3 bg-gradient-to-tr from-sage-500/10 to-emerald-500/20 border border-sage-500/20 rounded-2xl mb-4">
+                <Activity className="h-8 w-8 text-sage-500 animate-pulse" />
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-wide">Welcome to Health 360</h2>
+              <p className="text-xs text-slate-400 mt-1">Physiotherapy Clinic Management Portal</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Admin ID
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter admin ID"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3 bg-slate-950/50 border border-slate-800 focus:border-sage-500 focus:ring-1 focus:ring-sage-500/20 rounded-xl text-sm text-white placeholder-slate-500 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full pl-11 pr-11 py-3 bg-slate-950/50 border border-slate-800 focus:border-sage-500 focus:ring-1 focus:ring-sage-500/20 rounded-xl text-sm text-white placeholder-slate-500 outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-350"
+                  >
+                    {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isValidating}
+                className="w-full mt-2 py-3 bg-gradient-to-r from-sage-500 to-emerald-600 hover:from-sage-600 hover:to-emerald-700 text-white font-bold rounded-xl text-sm shadow-lg shadow-emerald-950/20 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {isValidating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Validating...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+        <Toaster position="top-right" richColors />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -239,10 +401,17 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
               <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-sm">
                 Dr
               </div>
-              <div className="hidden sm:block">
+              <div className="hidden sm:block text-left">
                 <p className="text-xs font-semibold text-slate-800 leading-none">Dr. Kekre</p>
                 <p className="text-[10px] text-slate-400 font-medium">Lead Physiotherapist</p>
               </div>
+              <button
+                title="Logout"
+                onClick={handleLogout}
+                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all ml-1 cursor-pointer"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </header>
