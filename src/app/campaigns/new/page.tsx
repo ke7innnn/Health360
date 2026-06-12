@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
+import { read, utils } from 'xlsx';
 import confetti from 'canvas-confetti';
 import { 
   Upload, 
@@ -98,58 +99,84 @@ export default function NewCampaignPage() {
     toast.success('CSV Template downloaded!');
   };
 
-  // CSV Parsing and validation
-  const parseCSV = (file: File) => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const parsed: ParsedPatient[] = results.data.map((row: any) => {
-          // Normalize keys (case insensitive / whitespace trimming)
-          const name = row.Name || row.name || row['Patient Name'] || '';
-          const rawContact = row.Contact || row.contact || row.Phone || row.phone || '';
-          const contact = sanitizePhone(rawContact); // auto-fix scientific notation, missing +91, etc.
-          const age = row.Age || row.age || '';
-          const patientType = row['Patient Type'] || row.patient_type || row.Type || row.type || 'General';
-          const context = row.Context || row.context || '';
-          const language = row.Language || row.language || 'English';
+  // File Parsing and validation
+  const processParsedData = (data: any[]) => {
+    const parsed: ParsedPatient[] = data.map((row: any) => {
+      // Normalize keys (case insensitive / whitespace trimming)
+      const name = row.Name || row.name || row['Patient Name'] || '';
+      const rawContact = row.Contact || row.contact || row.Phone || row.phone || '';
+      const contact = sanitizePhone(rawContact); // auto-fix scientific notation, missing +91, etc.
+      const age = row.Age || row.age || '';
+      const patientType = row['Patient Type'] || row.patient_type || row.Type || row.type || 'General';
+      const context = row.Context || row.context || '';
+      const language = row.Language || row.language || 'English';
 
-          const isValid = !!(name.trim() && contact.trim());
+      const isValid = !!(name.toString().trim() && contact.toString().trim());
 
-          return {
-            patient_name: name.trim(),
-            contact: contact.trim(),
-            age: age.toString().trim(),
-            patient_type: patientType.trim(),
-            context: context.trim(),
-            language: language.trim(),
-            isValid
-          };
-        });
-
-        setPatients(parsed);
-        if (parsed.length > 0) {
-          toast.success(`Parsed ${parsed.length} patients successfully!`);
-          
-          // Generate auto campaign name if empty
-          if (!campaignName) {
-            const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            setCampaignName(`Campaign ${dateStr} - ${parsed.length} Patients`);
-          }
-        } else {
-          toast.error('No patient rows found in the CSV.');
-        }
-      },
-      error: (error) => {
-        console.error(error);
-        toast.error('Failed to parse CSV file. Ensure it is formatted correctly.');
-      }
+      return {
+        patient_name: name.toString().trim(),
+        contact: contact.toString().trim(),
+        age: age.toString().trim(),
+        patient_type: patientType.toString().trim(),
+        context: context.toString().trim(),
+        language: language.toString().trim(),
+        isValid
+      };
     });
+
+    setPatients(parsed);
+    if (parsed.length > 0) {
+      toast.success(`Parsed ${parsed.length} patients successfully!`);
+      
+      // Generate auto campaign name if empty
+      if (!campaignName) {
+        const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        setCampaignName(`Campaign ${dateStr} - ${parsed.length} Patients`);
+      }
+    } else {
+      toast.error('No patient rows found in the uploaded file.');
+    }
+  };
+
+  const parseRosterFile = (file: File) => {
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const jsonData = utils.sheet_to_json(sheet);
+          
+          processParsedData(jsonData);
+        } catch (error) {
+          console.error(error);
+          toast.error('Failed to parse Excel file. Ensure it is formatted correctly.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // CSV Parsing
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          processParsedData(results.data);
+        },
+        error: (error) => {
+          console.error(error);
+          toast.error('Failed to parse CSV file. Ensure it is formatted correctly.');
+        }
+      });
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      parseCSV(e.target.files[0]);
+      parseRosterFile(e.target.files[0]);
     }
   };
 
@@ -166,7 +193,7 @@ export default function NewCampaignPage() {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      parseCSV(e.dataTransfer.files[0]);
+      parseRosterFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -255,7 +282,7 @@ export default function NewCampaignPage() {
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Upload & Launch Campaign</h1>
-          <p className="text-sm text-slate-500">Upload a patient CSV roster to begin automated outbound feedback calls.</p>
+          <p className="text-sm text-slate-500">Upload a patient CSV or Excel roster to begin automated outbound feedback calls.</p>
         </div>
         <Button 
           variant="outline" 
@@ -268,7 +295,7 @@ export default function NewCampaignPage() {
       </div>
 
       {patients.length === 0 ? (
-        /* CSV Drop Zone */
+        /* Drop Zone */
         <Card className="rounded-3xl border-2 border-dashed border-slate-200 bg-white hover:border-sage-500/50 transition-colors shadow-sm">
           <CardContent 
             className={`p-12 flex flex-col items-center justify-center text-center cursor-pointer ${
@@ -283,18 +310,18 @@ export default function NewCampaignPage() {
               type="file" 
               ref={fileInputRef} 
               className="hidden" 
-              accept=".csv"
+              accept=".csv, .xlsx, .xls"
               onChange={handleFileChange}
             />
             <div className="p-4 bg-sage-50 text-sage-600 rounded-full mb-4 animate-pulse">
               <Upload className="h-8 w-8" />
             </div>
-            <h3 className="font-bold text-slate-800 text-lg">Drop your patient CSV here</h3>
+            <h3 className="font-bold text-slate-800 text-lg">Drop your patient CSV or Excel here</h3>
             <p className="text-xs text-slate-400 max-w-xs mt-1 mb-6">
-              Or click to search your files. Make sure columns contain Name and Contact number.
+              Or click to search your files. Supports CSV, XLSX, and XLS formats with Name and Contact columns.
             </p>
             <Button className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl shadow-md">
-              Choose CSV File
+              Choose File
             </Button>
           </CardContent>
         </Card>
