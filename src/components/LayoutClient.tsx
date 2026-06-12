@@ -63,7 +63,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
 
   // Check auth on mount
   useEffect(() => {
-    const auth = localStorage.getItem('health360_auth');
+    const auth = sessionStorage.getItem('health360_auth');
     if (auth === 'true') {
       setIsAuthenticated(true);
     }
@@ -71,7 +71,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('health360_auth');
+    sessionStorage.removeItem('health360_auth');
     setIsAuthenticated(false);
     toast.success('Logged out successfully.');
   };
@@ -87,7 +87,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
     try {
       const credentialsHash = await sha256(`${loginUsername}:${loginPassword}`);
       if (credentialsHash === '5239c6756fa8614fd544a776790a8d00f76607f6b58057dda96e8141ab320774') {
-        localStorage.setItem('health360_auth', 'true');
+        sessionStorage.setItem('health360_auth', 'true');
         setIsAuthenticated(true);
         toast.success('Welcome back, Admin!', {
           description: 'Access granted to Health 360 Dashboard.',

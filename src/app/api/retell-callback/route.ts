@@ -167,13 +167,24 @@ export async function POST(request: Request) {
       const transcript = callData?.transcript || '';
       const durationMs = callData?.duration_ms || callData?.call_duration_ms || 0;
       const recordingUrl = callData?.recording_url || '';
+      const disconnectionReason = callData?.disconnection_reason || '';
 
       const durationSeconds = durationMs ? Math.round(durationMs / 1000) : 0;
-      // Consider completed if > 3 seconds (avoid false positives from missed calls)
-      const callStatus = durationSeconds > 3 ? 'completed' : 'failed';
+
+      // Call is failed if voicemail is reached, line is busy, dialing fails, not connected, or duration is 10s or less
+      const isFailedReason = [
+        'voicemail_reached',
+        'dial_busy',
+        'dial_failed',
+        'dial_no_answer',
+        'not_connected',
+        'connection_lost'
+      ].includes(disconnectionReason);
+
+      const callStatus = (durationSeconds > 10 && !isFailedReason) ? 'completed' : 'failed';
       const sentiment = transcript ? detectSentiment(transcript) : 'neutral';
 
-      console.log(`[Callback] call_ended — duration=${durationSeconds}s → status="${callStatus}"`);
+      console.log(`[Callback] call_ended — duration=${durationSeconds}s, reason="${disconnectionReason}" → status="${callStatus}"`);
 
       const record = await findCallRecord(retellCallId, metadata);
       if (!record) {
