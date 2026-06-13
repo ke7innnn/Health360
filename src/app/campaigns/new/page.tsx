@@ -99,27 +99,46 @@ export default function NewCampaignPage() {
     toast.success('CSV Template downloaded!');
   };
 
+// Helper to look up keys case-insensitively and space-insensitively
+function getRowValue(row: any, keys: string[], defaultValue = ''): string {
+  if (!row) return defaultValue;
+  
+  // Create a normalized mapping of keys (lowercase, no symbols/spaces)
+  const normalizedRow: Record<string, any> = {};
+  for (const k of Object.keys(row)) {
+    const normK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    normalizedRow[normK] = row[k];
+  }
+
+  for (const key of keys) {
+    const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normalizedRow[normKey] !== undefined && normalizedRow[normKey] !== null) {
+      return String(normalizedRow[normKey]).trim();
+    }
+  }
+  return defaultValue;
+}
+
   // File Parsing and validation
   const processParsedData = (data: any[]) => {
     const parsed: ParsedPatient[] = data.map((row: any) => {
-      // Normalize keys (case insensitive / whitespace trimming)
-      const name = row.Name || row.name || row['Patient Name'] || '';
-      const rawContact = row.Contact || row.contact || row.Phone || row.phone || '';
-      const contact = sanitizePhone(rawContact); // auto-fix scientific notation, missing +91, etc.
-      const age = row.Age || row.age || '';
-      const patientType = row['Patient Type'] || row.patient_type || row.Type || row.type || 'General';
-      const context = row.Context || row.context || '';
-      const language = row.Language || row.language || 'English';
+      const name = getRowValue(row, ['name', 'patient_name', 'patient name']);
+      const rawContact = getRowValue(row, ['contact', 'phone', 'phone_number', 'contact_number', 'contact number']);
+      const contact = sanitizePhone(rawContact);
+      const age = getRowValue(row, ['age']);
+      const patientType = getRowValue(row, ['patient_type', 'patienttype', 'patient type', 'type', 'condition'], 'General');
+      const context = getRowValue(row, ['context', 'notes', 'prompt']);
+      const language = getRowValue(row, ['language', 'lang'], 'English');
 
-      const isValid = !!(name.toString().trim() && contact.toString().trim());
+      const isValid = !!(name && contact);
 
       return {
-        patient_name: name.toString().trim(),
-        contact: contact.toString().trim(),
-        age: age.toString().trim(),
-        patient_type: patientType.toString().trim(),
-        context: context.toString().trim(),
-        language: language.toString().trim(),
+        patient_name: name,
+        contact: contact,
+        age: age,
+        patient_type: patientType,
+        context: context,
+        language: language,
         isValid
       };
     });
