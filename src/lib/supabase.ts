@@ -11,6 +11,22 @@ export interface Campaign {
   created_at: string;
 }
 
+export interface ProjectPatient {
+  patient_name: string;
+  contact: string;
+  age: string;
+  patient_type: string;
+  context: string;
+  language?: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  patients: ProjectPatient[];
+  created_at: string;
+}
+
 export interface Call {
   id: string;
   campaign_id?: string;
@@ -325,6 +341,56 @@ if (typeof window !== 'undefined') {
 
 // Database API Wrapper
 export const db = {
+  // Projects (Patient Lists)
+  async getProjects(): Promise<Project[]> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+      if (!error && data) return data;
+      // If table doesn't exist, error will be populated. Fall back to local storage silently.
+    }
+    return getLocalStorageData<Project[]>('h360_projects', []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
+
+  async getProject(id: string): Promise<Project | null> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('projects').select('*').eq('id', id).single();
+      if (!error && data) return data;
+    }
+    const projects = getLocalStorageData<Project[]>('h360_projects', []);
+    return projects.find(p => p.id === id) || null;
+  },
+
+  async createProject(name: string, patients: ProjectPatient[]): Promise<Project> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('projects').insert([{ name, patients }]).select().single();
+      if (!error && data) return data;
+    }
+    
+    // Fallback Local Storage
+    const newProject: Project = {
+      id: `proj_${Date.now()}`,
+      name,
+      patients,
+      created_at: new Date().toISOString()
+    };
+    const projects = getLocalStorageData<Project[]>('h360_projects', []);
+    projects.push(newProject);
+    setLocalStorageData('h360_projects', projects);
+    notifySubscribers('INSERT', 'projects', newProject);
+    return newProject;
+  },
+
+  async deleteProject(id: string): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('projects').delete().eq('id', id);
+      if (!error) return;
+    }
+    
+    const projects = getLocalStorageData<Project[]>('h360_projects', []);
+    setLocalStorageData('h360_projects', projects.filter(p => p.id !== id));
+    notifySubscribers('REFRESH', 'all', null);
+  },
+
   // Campaigns
   async getCampaigns(): Promise<Campaign[]> {
     if (isSupabaseConfigured && supabase) {

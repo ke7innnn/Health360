@@ -18,7 +18,8 @@ import {
   Eye,
   EyeOff,
   Loader2,
-  LogOut
+  LogOut,
+  ClipboardList
 } from 'lucide-react';
 import { db, isSupabaseConfigured, subscribeToRealtime } from '@/lib/supabase';
 import { Toaster } from '@/components/ui/sonner';
@@ -42,6 +43,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+  { name: 'Patient Lists', href: '/projects', icon: ClipboardList },
   { name: 'Patients / Calls', href: '/patients', icon: Users },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 }
 ];

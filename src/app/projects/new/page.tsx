@@ -1,16 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import { read, utils } from 'xlsx';
-import confetti from 'canvas-confetti';
 import { 
   Upload, 
   Download, 
   Trash2, 
-  Play, 
+  Save, 
   AlertTriangle, 
   ArrowLeft,
   Sparkles,
@@ -18,10 +17,9 @@ import {
   Plus,
   X,
   FileSpreadsheet,
-  Info,
-  ClipboardList
+  Info
 } from 'lucide-react';
-import { db, Project } from '@/lib/supabase';
+import { db, ProjectPatient } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -29,47 +27,38 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
-interface ParsedPatient {
-  patient_name: string;
-  contact: string;
-  age: string;
-  patient_type: string;
-  context: string;
+interface ParsedPatient extends ProjectPatient {
   isValid: boolean;
 }
 
-// ─── Blank row factory (matches Retell prompt variables) ──────────────────────
 const blankRow = (): ParsedPatient => ({
-  patient_name: '',   // → {{ patient_name }}
+  patient_name: '',
   contact: '',
   age: '',
-  patient_type: '',   // → {{ patient_type }}
-  context: '',        // → {{ patient_context }}
+  patient_type: '',
+  context: '',
   isValid: false,
 });
 
-// ─── Auto-fix phone numbers ───────────────────────────────────────────────────
 function sanitizePhone(raw: string): string {
   if (!raw) return '';
   let num = raw.toString().trim();
-  if (/\d+\.?\d*[eE][+\-]?\d+/.test(num)) {
+  if (/\\d+\\.?\\d*[eE][+\\-]?\\d+/.test(num)) {
     num = Math.round(parseFloat(num)).toString();
   }
-  num = num.replace(/[^\d+]/g, '');
+  num = num.replace(/[^\\d+]/g, '');
   if (num.startsWith('0')) num = '+91' + num.slice(1);
-  if (/^\d{10}$/.test(num)) num = '+91' + num;
-  if (/^91\d{10}$/.test(num)) num = '+' + num;
+  if (/^\\d{10}$/.test(num)) num = '+91' + num;
+  if (/^91\\d{10}$/.test(num)) num = '+' + num;
   if (!num.startsWith('+') && num.length > 0) num = '+' + num;
   return num;
 }
 
-// ─── Title-case helper ────────────────────────────────────────────────────────
 function toTitleCase(str: string): string {
   if (!str) return '';
   return str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
 
-// ─── Case-insensitive column lookup ──────────────────────────────────────────
 function getRowValue(row: any, keys: string[], defaultValue = ''): string {
   if (!row) return defaultValue;
   const normalizedRow: Record<string, any> = {};
@@ -85,45 +74,23 @@ function getRowValue(row: any, keys: string[], defaultValue = ''): string {
   return defaultValue;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-export default function NewCampaignPage() {
+export default function NewProjectPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // "upload" | "manual" | "project"
-  const [inputMode, setInputMode] = useState<'upload' | 'manual' | 'project'>('upload');
+  const [inputMode, setInputMode] = useState<'upload' | 'manual'>('upload');
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(false);
-
-  useEffect(() => {
-    const loadProjects = async () => {
-      setLoadingProjects(true);
-      try {
-        const data = await db.getProjects();
-        setProjects(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoadingProjects(false);
-      }
-    };
-    loadProjects();
-  }, []);
-
-  const [campaignName, setCampaignName] = useState('');
+  const [projectName, setProjectName] = useState('');
   const [patients, setPatients] = useState<ParsedPatient[]>([]);
   const [manualRows, setManualRows] = useState<ParsedPatient[]>([blankRow(), blankRow(), blankRow()]);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isLaunching, setIsLaunching] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // ── CSV template download ────────────────────────────────────────────────
   const handleDownloadTemplate = () => {
     const csv =
-      'Name,Contact,Age,Patient Type,Context\n' +
-      'Rahul Sharma,+91 98765 43210,45,Knee Pain,Post-surgery checkup after 3 weeks\n' +
-      'Sunita Patil,+91 98234 56789,62,Knee Pain,Routine check for osteoarthritis treatment\n';
+      'Name,Contact,Age,Patient Type,Context\\n' +
+      'Rahul Sharma,+91 98765 43210,45,Knee Pain,Post-surgery checkup after 3 weeks\\n' +
+      'Sunita Patil,+91 98234 56789,62,Knee Pain,Routine check for osteoarthritis treatment\\n';
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -132,7 +99,6 @@ export default function NewCampaignPage() {
     toast.success('CSV Template downloaded!');
   };
 
-  // ── Parsed data processing (shared by upload & manual) ──────────────────
   const processParsedData = (data: any[]) => {
     const parsed: ParsedPatient[] = data.map((row: any) => {
       let name = getRowValue(row, ['name', 'patient_name', 'patient name']);
@@ -147,16 +113,15 @@ export default function NewCampaignPage() {
     setPatients(parsed);
     if (parsed.length > 0) {
       toast.success(`Parsed ${parsed.length} patients successfully!`);
-      if (!campaignName) {
+      if (!projectName) {
         const d = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        setCampaignName(`Campaign ${d} - ${parsed.length} Patients`);
+        setProjectName(`Patient List ${d}`);
       }
     } else {
       toast.error('No patient rows found in the uploaded file.');
     }
   };
 
-  // ── File parsing ─────────────────────────────────────────────────────────
   const parseRosterFile = (file: File) => {
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
     if (isExcel) {
@@ -190,18 +155,16 @@ export default function NewCampaignPage() {
   };
   const handleClear = () => {
     setPatients([]);
-    setCampaignName('');
+    setProjectName('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // ── Manual row helpers ───────────────────────────────────────────────────
   const updateManualRow = (idx: number, field: keyof ParsedPatient, value: string) => {
     setManualRows(prev => {
       const next = [...prev];
       const row = { ...next[idx], [field]: value };
-      // auto-format name & sanitize phone on the fly
-      if (field === 'patient_name') row.patient_name = value; // keep raw while typing
-      if (field === 'contact') row.contact = value;           // keep raw while typing
+      if (field === 'patient_name') row.patient_name = value;
+      if (field === 'contact') row.contact = value;
       row.isValid = !!(row.patient_name.trim() && row.contact.trim());
       next[idx] = row;
       return next;
@@ -214,7 +177,6 @@ export default function NewCampaignPage() {
     setManualRows(prev => prev.filter((_, i) => i !== idx));
   };
 
-  // Convert manual rows → proper parsed patients and load into patients state
   const confirmManualRows = () => {
     const valid = manualRows.filter(r => r.patient_name.trim() || r.contact.trim());
     if (valid.length === 0) { toast.warning('Please fill in at least one patient row.'); return; }
@@ -227,34 +189,31 @@ export default function NewCampaignPage() {
       isValid: !!(r.patient_name.trim() && sanitizePhone(r.contact)),
     }));
     setPatients(processed);
-    if (!campaignName) {
+    if (!projectName) {
       const d = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      setCampaignName(`Campaign ${d} - ${processed.length} Patients`);
+      setProjectName(`Patient List ${d}`);
     }
-    toast.success(`${processed.length} patients added to campaign roster!`);
+    toast.success(`${processed.length} patients added to list!`);
   };
 
-  // ── Launch campaign ──────────────────────────────────────────────────────
-  const handleLaunchCampaign = async () => {
-    if (!campaignName.trim()) { toast.warning('Please enter a campaign name.'); return; }
+  const handleSaveProject = async () => {
+    if (!projectName.trim()) { toast.warning('Please enter a list name.'); return; }
     const invalid = patients.filter(p => !p.isValid).length;
-    if (invalid > 0) { toast.warning(`Cannot launch with ${invalid} invalid record(s).`); return; }
+    if (invalid > 0) { toast.warning(`Cannot save with ${invalid} invalid record(s).`); return; }
+    
     try {
-      setIsLaunching(true);
-      const camp = await db.createCampaign(campaignName, patients);
-      const end = Date.now() + 2500;
-      const colors = ['#879882', '#0f172a', '#10b981'];
-      (function frame() {
-        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 }, colors });
-        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors });
-        if (Date.now() < end) requestAnimationFrame(frame);
-      }());
-      toast.success('Campaign launched!', { description: 'Initiating AI outbound dialer...' });
-      setTimeout(() => router.push(`/campaigns/${camp.id}`), 1500);
+      setIsSaving(true);
+      const cleanPatients = patients.map(p => {
+        const { isValid, ...rest } = p;
+        return rest;
+      });
+      await db.createProject(projectName, cleanPatients);
+      toast.success('Patient list saved successfully!');
+      setTimeout(() => router.push('/projects'), 1500);
     } catch (err) {
       console.error(err);
-      toast.error('Failed to create campaign. Please try again.');
-      setIsLaunching(false);
+      toast.error('Failed to save patient list. Please try again.');
+      setIsSaving(false);
     }
   };
 
@@ -263,24 +222,22 @@ export default function NewCampaignPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-800 rounded-xl" onClick={() => router.push('/campaigns')}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-800 rounded-xl" onClick={() => router.push('/projects')}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Lists
         </Button>
       </div>
 
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create & Launch Campaign</h1>
-          <p className="text-sm text-slate-500">Add patients via file upload or enter them directly in the app.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create Patient List</h1>
+          <p className="text-sm text-slate-500">Save a group of patients to easily launch campaigns later.</p>
         </div>
         <Button variant="outline" size="sm" className="rounded-xl gap-2 text-slate-600 hover:bg-slate-50" onClick={handleDownloadTemplate}>
           <Download className="h-4 w-4" /> Download CSV Template
         </Button>
       </div>
 
-      {/* ── Mode toggle tabs ───────────────────────────────────────────── */}
       {patients.length === 0 && (
         <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl w-fit">
           <button
@@ -305,80 +262,12 @@ export default function NewCampaignPage() {
             <PenLine className="h-4 w-4" />
             Enter Manually
           </button>
-          <button
-            onClick={() => setInputMode('project')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all ${
-              inputMode === 'project'
-                ? 'bg-white text-slate-800 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <ClipboardList className="h-4 w-4" />
-            Select from List
-          </button>
         </div>
       )}
 
       <AnimatePresence mode="wait">
         {patients.length === 0 ? (
-
-          inputMode === 'project' ? (
-            /* ── Select from List ─────────────────────────────────────────── */
-            <motion.div key="project" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Card className="rounded-3xl border-slate-200 bg-white shadow-sm overflow-hidden min-h-[300px]">
-                <CardHeader className="p-5 border-b border-slate-100">
-                  <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4 text-sage-500" /> Choose a Patient List
-                  </CardTitle>
-                  <CardDescription className="text-xs text-slate-400 mt-0.5">
-                    Select a previously saved patient list to use for this campaign.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {loadingProjects ? (
-                    <div className="flex justify-center items-center h-32">
-                      <div className="animate-pulse flex flex-col items-center gap-2">
-                        <div className="h-6 w-6 rounded-full border-2 border-sage-500 border-t-transparent animate-spin" />
-                        <span className="text-xs text-slate-400">Loading lists...</span>
-                      </div>
-                    </div>
-                  ) : projects.length === 0 ? (
-                    <div className="text-center py-10">
-                      <p className="text-sm text-slate-500 mb-4">You don't have any saved patient lists yet.</p>
-                      <Button variant="outline" onClick={() => router.push('/projects/new')} className="rounded-xl border-sage-200 text-sage-600 hover:bg-sage-50">
-                        Create a List
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {projects.map(proj => (
-                        <div 
-                          key={proj.id} 
-                          onClick={() => {
-                            const parsed = proj.patients.map(p => ({
-                              ...p,
-                              isValid: !!(p.patient_name?.trim() && p.contact?.trim())
-                            }));
-                            setPatients(parsed);
-                            setCampaignName(`Campaign: ${proj.name}`);
-                            toast.success(`Loaded ${parsed.length} patients from list.`);
-                          }}
-                          className="border border-slate-200 hover:border-sage-400 hover:shadow-sm rounded-2xl p-4 cursor-pointer transition-all hover:bg-sage-50/10 group"
-                        >
-                          <h4 className="font-bold text-slate-800 text-sm group-hover:text-sage-600 transition-colors">{proj.name}</h4>
-                          <p className="text-xs text-slate-500 mt-1">{proj.patients.length} patients</p>
-                          <p className="text-[10px] text-slate-400 mt-2">
-                            Created {new Date(proj.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          ) : inputMode === 'upload' ? (
-            /* ── Upload Drop Zone ─────────────────────────────────────────── */
+          inputMode === 'upload' ? (
             <motion.div key="upload" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
               <Card className="rounded-3xl border-2 border-dashed border-slate-200 bg-white hover:border-sage-500/50 transition-colors shadow-sm">
                 <CardContent
@@ -400,12 +289,8 @@ export default function NewCampaignPage() {
                 </CardContent>
               </Card>
             </motion.div>
-
           ) : (
-            /* ── Manual Entry Sheet ────────────────────────────────────────── */
             <motion.div key="manual" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
-
-              {/* Retell prompt variable legend */}
               <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-2xl p-4">
                 <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-700 font-medium leading-relaxed">
@@ -423,7 +308,7 @@ export default function NewCampaignPage() {
                       <Sparkles className="h-4 w-4 text-sage-500" /> Patient Entry Sheet
                     </CardTitle>
                     <CardDescription className="text-xs text-slate-400 mt-0.5">
-                      Fill in patient details below. Each row = one outbound AI call.
+                      Fill in patient details below to save them in a list.
                     </CardDescription>
                   </div>
                   {filledManualRows > 0 && (
@@ -432,7 +317,6 @@ export default function NewCampaignPage() {
                     </Badge>
                   )}
                 </CardHeader>
-
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs border-collapse">
@@ -441,7 +325,6 @@ export default function NewCampaignPage() {
                           <th className="text-left px-4 py-3 font-bold text-slate-500 uppercase tracking-wide w-8 text-center">#</th>
                           <th className="text-left px-4 py-3 font-bold text-slate-500 uppercase tracking-wide min-w-[180px]">
                             Patient Name
-                            <span className="ml-1 text-[10px] font-mono text-blue-400 normal-case">{'{{patient_name}}'}</span>
                           </th>
                           <th className="text-left px-4 py-3 font-bold text-slate-500 uppercase tracking-wide min-w-[150px]">
                             Contact Number
@@ -449,11 +332,9 @@ export default function NewCampaignPage() {
                           <th className="text-left px-4 py-3 font-bold text-slate-500 uppercase tracking-wide min-w-[60px]">Age</th>
                           <th className="text-left px-4 py-3 font-bold text-slate-500 uppercase tracking-wide min-w-[180px]">
                             Treatment / Condition
-                            <span className="ml-1 text-[10px] font-mono text-blue-400 normal-case">{'{{patient_type}}'}</span>
                           </th>
                           <th className="text-left px-4 py-3 font-bold text-slate-500 uppercase tracking-wide min-w-[280px]">
                             Call Context / Notes
-                            <span className="ml-1 text-[10px] font-mono text-blue-400 normal-case">{'{{patient_context}}'}</span>
                           </th>
                           <th className="w-10" />
                         </tr>
@@ -506,7 +387,7 @@ export default function NewCampaignPage() {
                                 type="text"
                                 value={row.context}
                                 onChange={e => updateManualRow(idx, 'context', e.target.value)}
-                                placeholder="e.g. Post-surgery follow-up, missed last session, next appt Monday 4pm"
+                                placeholder="e.g. Post-surgery follow-up"
                                 className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-sage-400 focus:ring-1 focus:ring-sage-400 bg-white"
                               />
                             </td>
@@ -539,26 +420,24 @@ export default function NewCampaignPage() {
                       disabled={filledManualRows === 0}
                     >
                       <Sparkles className="h-3.5 w-3.5" />
-                      Confirm {filledManualRows > 0 ? `${filledManualRows} Patient${filledManualRows > 1 ? 's' : ''}` : 'Patients'}
+                      Confirm Data
                     </Button>
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
           )
-
         ) : (
-          /* ── Preview Table + Launch ──────────────────────────────────────── */
           <motion.div key="preview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <Card className="rounded-3xl border-slate-200 bg-white shadow-sm overflow-hidden">
               <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-md font-bold text-slate-800">Roster Preview</CardTitle>
-                  <CardDescription className="text-xs text-slate-400">Review all patients before launching the dialer.</CardDescription>
+                  <CardTitle className="text-md font-bold text-slate-800">List Preview</CardTitle>
+                  <CardDescription className="text-xs text-slate-400">Review all patients before saving the list.</CardDescription>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge className="bg-sage-100 text-sage-700 hover:bg-sage-100 border border-sage-200">
-                    {patients.length} patients found
+                    {patients.length} patients
                   </Badge>
                   <Button variant="ghost" size="sm" className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl" onClick={handleClear}>
                     <Trash2 className="h-4 w-4 mr-1" /> Clear
@@ -570,17 +449,11 @@ export default function NewCampaignPage() {
                   <Table>
                     <TableHeader className="bg-slate-50 sticky top-0">
                       <TableRow className="bg-slate-50 border-b border-slate-100 hover:bg-slate-50">
-                        <TableHead className="font-semibold text-xs text-slate-500 w-[180px]">
-                          Name <span className="font-mono text-[10px] text-blue-400">{'{{patient_name}}'}</span>
-                        </TableHead>
+                        <TableHead className="font-semibold text-xs text-slate-500 w-[180px]">Name</TableHead>
                         <TableHead className="font-semibold text-xs text-slate-500 w-[140px]">Contact</TableHead>
                         <TableHead className="font-semibold text-xs text-slate-500 w-[60px]">Age</TableHead>
-                        <TableHead className="font-semibold text-xs text-slate-500 w-[160px]">
-                          Treatment <span className="font-mono text-[10px] text-blue-400">{'{{patient_type}}'}</span>
-                        </TableHead>
-                        <TableHead className="font-semibold text-xs text-slate-500">
-                          Context <span className="font-mono text-[10px] text-blue-400">{'{{patient_context}}'}</span>
-                        </TableHead>
+                        <TableHead className="font-semibold text-xs text-slate-500 w-[160px]">Treatment</TableHead>
+                        <TableHead className="font-semibold text-xs text-slate-500">Context</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -611,7 +484,7 @@ export default function NewCampaignPage() {
                 <div>
                   <h4 className="font-bold text-sm text-red-800">Roster validation failed</h4>
                   <p className="text-xs text-red-600 mt-0.5">
-                    One or more rows have missing Name or Contact (highlighted in red). Fix them before launching.
+                    One or more rows have missing Name or Contact (highlighted in red). Fix them before saving.
                   </p>
                 </div>
               </div>
@@ -619,26 +492,26 @@ export default function NewCampaignPage() {
 
             <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
               <CardHeader className="p-6 border-b border-slate-100">
-                <CardTitle className="text-sm font-bold text-slate-800">Campaign Settings</CardTitle>
+                <CardTitle className="text-sm font-bold text-slate-800">List Settings</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Campaign Name</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Patient List Name</label>
                   <Input
-                    placeholder="e.g. Back Pain Follow-up – Week 2"
-                    value={campaignName}
-                    onChange={e => setCampaignName(e.target.value)}
+                    placeholder="e.g. Morning Patients - Knee Pain"
+                    value={projectName}
+                    onChange={e => setProjectName(e.target.value)}
                     className="rounded-xl border-slate-200 focus:border-sage-500 focus:ring-1 focus:ring-sage-500"
                   />
                 </div>
                 <div className="pt-2 flex justify-end">
                   <Button
                     className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl shadow-md px-6 gap-2"
-                    onClick={handleLaunchCampaign}
-                    disabled={isLaunching || hasInvalidRows || !campaignName.trim()}
+                    onClick={handleSaveProject}
+                    disabled={isSaving || hasInvalidRows || !projectName.trim()}
                   >
-                    <Play className="h-4 w-4" />
-                    {isLaunching ? 'Launching...' : 'Start Calling'}
+                    <Save className="h-4 w-4" />
+                    {isSaving ? 'Saving...' : 'Save Patient List'}
                   </Button>
                 </div>
               </CardContent>
