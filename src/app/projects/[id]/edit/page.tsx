@@ -75,7 +75,7 @@ function getRowValue(row: any, keys: string[], defaultValue = ''): string {
   return defaultValue;
 }
 
-export default function EditProjectPage({ params }: { params: { id: string } }) {
+export default function EditProjectPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -89,22 +89,25 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
   const [isSaving, setIsSaving] = useState(false);
 
   React.useEffect(() => {
-    db.getProject(params.id).then(proj => {
-      if (proj) {
-        setProjectName(proj.name);
-        const rows = proj.patients.map(p => ({
-          ...p,
-          isValid: !!((p.patient_name || '').trim() && (p.contact || '').trim()),
-        }));
-        setManualRows(rows.length > 0 ? rows : [blankRow(), blankRow(), blankRow()]);
-        setInputMode('manual');
-      } else {
-        toast.error('Patient list not found.');
-        router.push('/projects');
-      }
-      setIsLoaded(true);
+    // Safely unwrap params for Next.js 15+
+    Promise.resolve(params).then(unwrappedParams => {
+      db.getProject(unwrappedParams.id).then(proj => {
+        if (proj) {
+          setProjectName(proj.name);
+          const rows = proj.patients.map(p => ({
+            ...p,
+            isValid: !!((p.patient_name || '').trim() && (p.contact || '').trim()),
+          }));
+          setManualRows(rows.length > 0 ? rows : [blankRow(), blankRow(), blankRow()]);
+          setInputMode('manual');
+        } else {
+          toast.error('Patient list not found.');
+          router.push('/projects');
+        }
+        setIsLoaded(true);
+      });
     });
-  }, [params.id, router]);
+  }, [params, router]);
 
   const handleDownloadTemplate = () => {
     const csv =
@@ -227,9 +230,11 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
         const { isValid, ...rest } = p;
         return rest;
       });
-      await db.updateProject(params.id, projectName, cleanPatients);
-      toast.success('Patient list updated successfully!');
-      setTimeout(() => router.push('/projects'), 1500);
+      Promise.resolve(params).then(async (unwrappedParams) => {
+        await db.updateProject(unwrappedParams.id, projectName, cleanPatients);
+        toast.success('Patient list updated successfully!');
+        setTimeout(() => router.push('/projects'), 1500);
+      });
     } catch (err) {
       console.error(err);
       toast.error('Failed to save patient list. Please try again.');
