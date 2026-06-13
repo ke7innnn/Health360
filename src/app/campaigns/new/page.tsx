@@ -30,7 +30,6 @@ interface ParsedPatient {
   age: string;
   patient_type: string;
   context: string;
-  language: string;
   isValid: boolean;
 }
 
@@ -83,10 +82,10 @@ export default function NewCampaignPage() {
   // CSV Template download
   const handleDownloadTemplate = () => {
     const csvContent = 
-      "Name,Contact,Age,Patient Type,Context,Language\n" +
-      "Rahul Sharma,+91 98765 43210,45,Knee Pain,Post-surgery checkup after 3 weeks,Hindi\n" +
-      "Sunita Patil,+91 98234 56789,62,Knee Pain,Routine check for osteoarthritis treatment,Marathi\n" +
-      "David Miller,+91 99112 23344,38,Frozen Shoulder,Post-sprain shoulder stiffness rehab check,English\n";
+      "Name,Contact,Age,Patient Type,Context\n" +
+      "Rahul Sharma,+91 98765 43210,45,Knee Pain,Post-surgery checkup after 3 weeks\n" +
+      "Sunita Patil,+91 98234 56789,62,Knee Pain,Routine check for osteoarthritis treatment\n" +
+      "David Miller,+91 99112 23344,38,Frozen Shoulder,Post-sprain shoulder stiffness rehab check\n";
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -128,7 +127,6 @@ function getRowValue(row: any, keys: string[], defaultValue = ''): string {
       const age = getRowValue(row, ['age']);
       const patientType = getRowValue(row, ['patient_type', 'patienttype', 'patient type', 'type', 'condition'], 'General');
       const context = getRowValue(row, ['context', 'notes', 'prompt']);
-      const language = getRowValue(row, ['language', 'lang'], 'English');
 
       const isValid = !!(name && contact);
 
@@ -138,7 +136,6 @@ function getRowValue(row: any, keys: string[], defaultValue = ''): string {
         age: age,
         patient_type: patientType,
         context: context,
-        language: language,
         isValid
       };
     });
@@ -329,7 +326,7 @@ function getRowValue(row: any, keys: string[], defaultValue = ''): string {
               type="file" 
               ref={fileInputRef} 
               className="hidden" 
-              accept=".csv, .xlsx, .xls"
+              accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               onChange={handleFileChange}
             />
             <div className="p-4 bg-sage-50 text-sage-600 rounded-full mb-4 animate-pulse">
@@ -371,12 +368,11 @@ function getRowValue(row: any, keys: string[], defaultValue = ''): string {
               <div className="overflow-x-auto max-h-[300px]">
                 <Table>
                   <TableHeader className="bg-slate-50 sticky top-0">
-                    <TableRow>
-                      <TableHead className="font-semibold text-xs text-slate-500">Name</TableHead>
-                      <TableHead className="font-semibold text-xs text-slate-500">Contact</TableHead>
-                      <TableHead className="font-semibold text-xs text-slate-500">Age</TableHead>
-                      <TableHead className="font-semibold text-xs text-slate-500">Patient Type</TableHead>
-                      <TableHead className="font-semibold text-xs text-slate-500">Language</TableHead>
+                    <TableRow className="bg-slate-50 border-b border-slate-100 hover:bg-slate-50">
+                      <TableHead className="font-semibold text-xs text-slate-500 rounded-tl-xl w-[200px]">Name</TableHead>
+                      <TableHead className="font-semibold text-xs text-slate-500 w-[150px]">Contact</TableHead>
+                      <TableHead className="font-semibold text-xs text-slate-500 w-[80px]">Age</TableHead>
+                      <TableHead className="font-semibold text-xs text-slate-500 w-[150px]">Patient Type</TableHead>
                       <TableHead className="font-semibold text-xs text-slate-500">Context</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -394,7 +390,6 @@ function getRowValue(row: any, keys: string[], defaultValue = ''): string {
                         </TableCell>
                         <TableCell className="text-xs text-slate-600">{pat.age || '--'}</TableCell>
                         <TableCell className="text-xs text-slate-600">{pat.patient_type || 'General'}</TableCell>
-                        <TableCell className="text-xs text-slate-600">{pat.language}</TableCell>
                         <TableCell className="text-xs text-slate-400 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap">
                           {pat.context || '--'}
                         </TableCell>
