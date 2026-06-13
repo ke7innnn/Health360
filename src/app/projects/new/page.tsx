@@ -43,17 +43,19 @@ const blankRow = (): ParsedPatient => ({
 function sanitizePhone(raw: string): string {
   if (!raw) return '';
   let num = raw.toString().trim();
-  if (/\\d+\\.?\\d*[eE][+\\-]?\\d+/.test(num)) {
+  // detect scientific notation from Excel (e.g. 9.19E+9)
+  if (/\d+\.?\d*[eE][+\-]?\d+/.test(num)) {
     num = Math.round(parseFloat(num)).toString();
   }
-  num = num.replace(/[^\\d+]/g, '');
+  num = num.replace(/[^\d+]/g, '');
   if (num.startsWith('0')) num = '+91' + num.slice(1);
-  if (/^\\d{10}$/.test(num)) num = '+91' + num;
-  if (/^91\\d{10}$/.test(num)) num = '+' + num;
+  if (/^\d{10}$/.test(num)) num = '+91' + num;
+  if (/^91\d{10}$/.test(num)) num = '+' + num;
   if (!num.startsWith('+') && num.length > 0) num = '+' + num;
   if (num === '+') return '';
   return num;
 }
+
 
 function toTitleCase(str: string): string {
   if (!str) return '';

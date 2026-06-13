@@ -52,6 +52,7 @@ const blankRow = (): ParsedPatient => ({
 function sanitizePhone(raw: string): string {
   if (!raw) return '';
   let num = raw.toString().trim();
+  // detect scientific notation from Excel (e.g. 9.19E+9)
   if (/\d+\.?\d*[eE][+\-]?\d+/.test(num)) {
     num = Math.round(parseFloat(num)).toString();
   }
@@ -63,6 +64,7 @@ function sanitizePhone(raw: string): string {
   if (num === '+') return '';
   return num;
 }
+
 
 // ─── Title-case helper ────────────────────────────────────────────────────────
 function toTitleCase(str: string): string {
