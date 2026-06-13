@@ -75,17 +75,36 @@ function getRowValue(row: any, keys: string[], defaultValue = ''): string {
   return defaultValue;
 }
 
-export default function NewProjectPage() {
+export default function EditProjectPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [inputMode, setInputMode] = useState<'upload' | 'manual'>('upload');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const [projectName, setProjectName] = useState('');
   const [patients, setPatients] = useState<ParsedPatient[]>([]);
   const [manualRows, setManualRows] = useState<ParsedPatient[]>([blankRow(), blankRow(), blankRow()]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  React.useEffect(() => {
+    db.getProject(params.id).then(proj => {
+      if (proj) {
+        setProjectName(proj.name);
+        const rows = proj.patients.map(p => ({
+          ...p,
+          isValid: !!((p.patient_name || '').trim() && (p.contact || '').trim()),
+        }));
+        setManualRows(rows.length > 0 ? rows : [blankRow(), blankRow(), blankRow()]);
+        setInputMode('manual');
+      } else {
+        toast.error('Patient list not found.');
+        router.push('/projects');
+      }
+      setIsLoaded(true);
+    });
+  }, [params.id, router]);
 
   const handleDownloadTemplate = () => {
     const csv =
@@ -156,7 +175,7 @@ export default function NewProjectPage() {
   };
   const handleClear = () => {
     setPatients([]);
-    setProjectName('');
+    // Do not clear projectName so they can try again with the same name
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -208,8 +227,8 @@ export default function NewProjectPage() {
         const { isValid, ...rest } = p;
         return rest;
       });
-      await db.createProject(projectName, cleanPatients);
-      toast.success('Patient list saved successfully!');
+      await db.updateProject(params.id, projectName, cleanPatients);
+      toast.success('Patient list updated successfully!');
       setTimeout(() => router.push('/projects'), 1500);
     } catch (err) {
       console.error(err);
@@ -223,7 +242,11 @@ export default function NewProjectPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center gap-2">
+      {!isLoaded ? (
+        <div className="animate-pulse h-96 bg-white rounded-3xl border border-slate-200" />
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-800 rounded-xl" onClick={() => router.push('/projects')}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back to Lists
         </Button>
@@ -231,7 +254,7 @@ export default function NewProjectPage() {
 
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create Patient List</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Edit Patient List</h1>
           <p className="text-sm text-slate-500">Save a group of patients to easily launch campaigns later.</p>
         </div>
         <Button variant="outline" size="sm" className="rounded-xl gap-2 text-slate-600 hover:bg-slate-50" onClick={handleDownloadTemplate}>
@@ -520,6 +543,8 @@ export default function NewProjectPage() {
           </motion.div>
         )}
       </AnimatePresence>
+        </>
+      )}
     </div>
   );
 }

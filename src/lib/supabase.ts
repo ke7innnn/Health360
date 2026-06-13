@@ -380,6 +380,24 @@ export const db = {
     return newProject;
   },
 
+  async updateProject(id: string, name: string, patients: ProjectPatient[]): Promise<Project> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('projects').update({ name, patients }).eq('id', id).select().single();
+      if (!error && data) return data;
+    }
+    
+    // Fallback Local Storage
+    const projects = getLocalStorageData<Project[]>('h360_projects', []);
+    const idx = projects.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      projects[idx] = { ...projects[idx], name, patients };
+      setLocalStorageData('h360_projects', projects);
+      notifySubscribers('UPDATE', 'projects', projects[idx]);
+      return projects[idx];
+    }
+    throw new Error('Project not found');
+  },
+
   async deleteProject(id: string): Promise<void> {
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase.from('projects').delete().eq('id', id);

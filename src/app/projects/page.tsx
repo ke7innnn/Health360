@@ -9,7 +9,8 @@ import {
   Loader2, 
   Sparkles,
   Inbox,
-  Trash2
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { db, isSupabaseConfigured, subscribeToRealtime, Project } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -142,21 +143,33 @@ export default function ProjectsPage() {
                       <div className="p-2 bg-sage-50 text-sage-600 rounded-xl shrink-0">
                         <ClipboardList className="h-5 w-5" />
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteProject(proj.id, proj.name);
-                        }}
-                        disabled={deletingId === proj.id}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-50"
-                        title="Delete List"
-                      >
-                        {deletingId === proj.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-rose-500" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </button>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${proj.id}/edit`);
+                          }}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                          title="Edit List"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteProject(proj.id, proj.name);
+                          }}
+                          disabled={deletingId === proj.id}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all disabled:opacity-50"
+                          title="Delete List"
+                        >
+                          {deletingId === proj.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-rose-500" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
 

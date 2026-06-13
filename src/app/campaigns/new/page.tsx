@@ -60,6 +60,7 @@ function sanitizePhone(raw: string): string {
   if (/^\d{10}$/.test(num)) num = '+91' + num;
   if (/^91\d{10}$/.test(num)) num = '+' + num;
   if (!num.startsWith('+') && num.length > 0) num = '+' + num;
+  if (num === '+') return '';
   return num;
 }
 
