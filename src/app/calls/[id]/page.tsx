@@ -184,26 +184,30 @@ export default function CallDetailPage() {
         <div className="lg:col-span-2 space-y-6 flex flex-col h-full">
           
           {/* Audio recording player */}
-          {call.recording_url && (
-            <Card className="rounded-3xl border-slate-200 bg-white shadow-sm overflow-hidden shrink-0">
-              <CardContent className="p-5 flex flex-col sm:flex-row items-center gap-4 bg-gradient-to-tr from-slate-50 to-sage-50/10">
-                <div className="p-3 bg-sage-100 text-sage-700 rounded-full shrink-0">
-                  <Volume2 className="h-6 w-6" />
-                </div>
-                <div className="flex-1 w-full text-center sm:text-left">
-                  <h4 className="font-bold text-sm text-slate-800">Call Audio Recording</h4>
-                  <p className="text-[10px] text-slate-400 font-semibold">Listen to the conversation recording.</p>
-                </div>
-                <div className="w-full sm:w-auto">
+          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm overflow-hidden shrink-0">
+            <CardContent className="p-5 flex flex-col sm:flex-row items-center gap-4 bg-gradient-to-tr from-slate-50 to-sage-50/10">
+              <div className="p-3 bg-sage-100 text-sage-700 rounded-full shrink-0">
+                <Volume2 className="h-6 w-6" />
+              </div>
+              <div className="flex-1 w-full text-center sm:text-left">
+                <h4 className="font-bold text-sm text-slate-800">Call Audio Recording</h4>
+                <p className="text-[10px] text-slate-400 font-semibold">Listen to the conversation recording.</p>
+              </div>
+              <div className="w-full sm:w-auto">
+                {call.recording_url ? (
                   <audio 
                     src={call.recording_url} 
                     controls 
                     className="w-full h-9 rounded-xl outline-none focus:ring-2 focus:ring-sage-500 custom-audio"
                   />
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                ) : (
+                  <div className="h-9 flex items-center justify-center px-4 bg-slate-100 rounded-xl border border-slate-200">
+                    <span className="text-xs font-semibold text-slate-400">Recording not available</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Groq AI Summary Card (only show for completed/failed calls) */}
           {(call.status === 'completed' || call.status === 'failed') && (

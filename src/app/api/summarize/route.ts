@@ -36,6 +36,7 @@ export async function POST(request: Request) {
             content: `Physio clinical assistant. Summarize call transcript in English only. Output exactly:
 - **Patient Recovery Status**: (compliance & state)
 - **Reported Symptoms & Pain**: (pain/stiffness)
+- **Callback Request**: (Extract if the patient asked to be called back later and at what exact time)
 - **Next Steps & Appointments**: (follow-ups)
 Be concise. Write "Not discussed" if missing.`,
           },
