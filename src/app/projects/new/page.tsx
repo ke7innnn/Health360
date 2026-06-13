@@ -165,7 +165,7 @@ export default function NewProjectPage() {
       const row = { ...next[idx], [field]: value };
       if (field === 'patient_name') row.patient_name = value;
       if (field === 'contact') row.contact = value;
-      row.isValid = !!(row.patient_name.trim() && row.contact.trim());
+      row.isValid = !!((row.patient_name || '').trim() && (row.contact || '').trim());
       next[idx] = row;
       return next;
     });
@@ -178,15 +178,15 @@ export default function NewProjectPage() {
   };
 
   const confirmManualRows = () => {
-    const valid = manualRows.filter(r => r.patient_name.trim() || r.contact.trim());
+    const valid = manualRows.filter(r => (r.patient_name || '').trim() || (r.contact || '').trim());
     if (valid.length === 0) { toast.warning('Please fill in at least one patient row.'); return; }
     const processed = valid.map(r => ({
-      patient_name: toTitleCase(r.patient_name.trim()),
-      contact: sanitizePhone(r.contact),
-      age: r.age.trim(),
-      patient_type: r.patient_type.trim() || 'General',
-      context: r.context.trim(),
-      isValid: !!(r.patient_name.trim() && sanitizePhone(r.contact)),
+      patient_name: toTitleCase((r.patient_name || '').trim()),
+      contact: sanitizePhone(r.contact || ''),
+      age: (r.age || '').trim(),
+      patient_type: (r.patient_type || '').trim() || 'General',
+      context: (r.context || '').trim(),
+      isValid: !!((r.patient_name || '').trim() && sanitizePhone(r.contact || '')),
     }));
     setPatients(processed);
     if (!projectName) {
@@ -342,8 +342,8 @@ export default function NewProjectPage() {
                       <tbody>
                         {manualRows.map((row, idx) => (
                           <tr key={idx} className={`border-b border-slate-100 transition-colors ${
-                            row.patient_name.trim() && !sanitizePhone(row.contact) ? 'bg-red-50/30' :
-                            row.patient_name.trim() && row.contact.trim() ? 'bg-emerald-50/20' : 'hover:bg-slate-50/50'
+                            (row.patient_name || '').trim() && !sanitizePhone(row.contact || '') ? 'bg-red-50/30' :
+                            (row.patient_name || '').trim() && (row.contact || '').trim() ? 'bg-emerald-50/20' : 'hover:bg-slate-50/50'
                           }`}>
                             <td className="px-4 py-2 text-center text-slate-400 font-mono font-bold">{idx + 1}</td>
                             <td className="px-2 py-1.5">
