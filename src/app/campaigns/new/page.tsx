@@ -359,12 +359,17 @@ export default function NewCampaignPage() {
                           key={proj.id} 
                           onClick={() => {
                             const parsed = proj.patients.map(p => ({
-                              ...p,
+                              patient_name: p.patient_name || '',
+                              contact: p.contact || '',
+                              age: p.age || '',
+                              patient_type: p.patient_type || '',
+                              context: p.context || '',
                               isValid: !!(p.patient_name?.trim() && p.contact?.trim())
                             }));
-                            setPatients(parsed);
+                            setManualRows(parsed);
+                            setInputMode('manual');
                             setCampaignName(`Campaign: ${proj.name}`);
-                            toast.success(`Loaded ${parsed.length} patients from list.`);
+                            toast.success(`Loaded ${parsed.length} patients. You can now edit them.`);
                           }}
                           className="border border-slate-200 hover:border-sage-400 hover:shadow-sm rounded-2xl p-4 cursor-pointer transition-all hover:bg-sage-50/10 group"
                         >
