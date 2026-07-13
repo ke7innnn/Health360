@@ -227,6 +227,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Processed.', status: callStatus, sentiment }, { status: 200 });
     }
 
+    // ── call_analyzed: capture transcript & summary ──────────────────────────
+    if (event === 'call_analyzed') {
+      if (!retellCallId) return NextResponse.json({ error: 'Missing call_id' }, { status: 200 });
+
+      const transcript = callData?.transcript || callData?.call_analysis?.transcript || '';
+      const sentiment = transcript ? detectSentiment(transcript) : 'neutral';
+
+      const record = await findCallRecord(retellCallId, metadata);
+      if (record && transcript) {
+        // Update just the transcript (and sentiment) in case it was missed in call_ended
+        await supabase.from('calls').update({
+          transcript: transcript,
+          sentiment: sentiment,
+        }).eq('id', record.id);
+        console.log(`[Callback] ✅ call_analyzed → updated transcript for ${record.id}`);
+      }
+      return NextResponse.json({ message: 'call_analyzed processed.' }, { status: 200 });
+    }
+
     // ── All other events ─────────────────────────────────────────────────────
     return NextResponse.json({ message: `Event "${event}" ignored.` }, { status: 200 });
 
