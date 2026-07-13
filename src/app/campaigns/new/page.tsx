@@ -19,9 +19,11 @@ import {
   X,
   FileSpreadsheet,
   Info,
-  ClipboardList
+  ClipboardList,
+  Search,
+  UserPlus
 } from 'lucide-react';
-import { db, Project } from '@/lib/supabase';
+import { db, Project, Patient } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -99,6 +101,9 @@ export default function NewCampaignPage() {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [directoryPatients, setDirectoryPatients] = useState<Patient[]>([]);
+  const [dirSearch, setDirSearch] = useState('');
+  const [showDirSearch, setShowDirSearch] = useState(false);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -106,6 +111,8 @@ export default function NewCampaignPage() {
       try {
         const data = await db.getProjects();
         setProjects(data);
+        const pats = await db.getPatients();
+        setDirectoryPatients(pats);
       } catch (err) {
         console.error(err);
       } finally {
@@ -150,6 +157,9 @@ export default function NewCampaignPage() {
     setPatients(parsed);
     if (parsed.length > 0) {
       toast.success(`Parsed ${parsed.length} patients successfully!`);
+      // Auto-save parsed to directory
+      db.upsertPatients(parsed).catch(console.error);
+      
       if (!campaignName) {
         const d = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         setCampaignName(`Campaign ${d} - ${parsed.length} Patients`);
@@ -230,6 +240,10 @@ export default function NewCampaignPage() {
       isValid: !!((r.patient_name || '').trim() && sanitizePhone(r.contact || '')),
     }));
     setPatients(processed);
+    
+    // Auto-save manual rows to directory
+    db.upsertPatients(processed).catch(console.error);
+
     if (!campaignName) {
       const d = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       setCampaignName(`Campaign ${d} - ${processed.length} Patients`);
@@ -534,12 +548,81 @@ export default function NewCampaignPage() {
                   </div>
 
                   <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <button
-                      onClick={addManualRow}
-                      className="flex items-center gap-1.5 text-xs font-bold text-sage-600 hover:text-sage-700 px-3 py-1.5 rounded-lg hover:bg-sage-50 transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" /> Add Row
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={addManualRow}
+                        className="flex items-center gap-1.5 text-xs font-bold text-sage-600 hover:text-sage-700 px-3 py-1.5 rounded-lg hover:bg-sage-50 transition-colors"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add Row
+                      </button>
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowDirSearch(!showDirSearch)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                        >
+                          <Search className="h-3.5 w-3.5" /> Search Directory
+                        </button>
+                        
+                        {showDirSearch && (
+                          <div className="absolute left-0 bottom-full mb-2 w-80 bg-white border border-slate-200 shadow-lg rounded-xl overflow-hidden z-50">
+                            <div className="p-2 border-b border-slate-100 bg-slate-50">
+                              <Input 
+                                autoFocus
+                                placeholder="Search by name or number..." 
+                                value={dirSearch}
+                                onChange={e => setDirSearch(e.target.value)}
+                                className="h-8 text-xs bg-white"
+                              />
+                            </div>
+                            <div className="max-h-60 overflow-y-auto p-1">
+                              {directoryPatients.filter(p => !dirSearch || p.patient_name.toLowerCase().includes(dirSearch.toLowerCase()) || p.contact.includes(dirSearch)).length === 0 ? (
+                                <div className="p-3 text-center text-xs text-slate-400">No patients found.</div>
+                              ) : (
+                                directoryPatients
+                                  .filter(p => !dirSearch || p.patient_name.toLowerCase().includes(dirSearch.toLowerCase()) || p.contact.includes(dirSearch))
+                                  .slice(0, 5)
+                                  .map(p => (
+                                    <div 
+                                      key={p.id} 
+                                      className="p-2 hover:bg-sage-50 rounded-lg cursor-pointer flex justify-between items-center group transition-colors"
+                                      onClick={() => {
+                                        setManualRows(prev => {
+                                          const next = [...prev];
+                                          // Find first empty row or add new
+                                          const emptyIdx = next.findIndex(r => !r.patient_name && !r.contact);
+                                          const newRow = {
+                                            patient_name: p.patient_name,
+                                            contact: p.contact,
+                                            age: p.age || '',
+                                            patient_type: p.patient_type || '',
+                                            context: '',
+                                            isValid: true
+                                          };
+                                          if (emptyIdx >= 0) {
+                                            next[emptyIdx] = newRow;
+                                          } else {
+                                            next.push(newRow);
+                                          }
+                                          return next;
+                                        });
+                                        toast.success(`Added ${p.patient_name} to roster.`);
+                                        setShowDirSearch(false);
+                                        setDirSearch('');
+                                      }}
+                                    >
+                                      <div>
+                                        <p className="text-xs font-bold text-slate-700">{p.patient_name}</p>
+                                        <p className="text-[10px] font-mono text-slate-500">{p.contact}</p>
+                                      </div>
+                                      <UserPlus className="h-4 w-4 text-slate-300 group-hover:text-sage-500" />
+                                    </div>
+                                  ))
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <Button
                       size="sm"
                       className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl gap-2 font-bold"

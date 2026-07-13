@@ -20,6 +20,15 @@ export interface ProjectPatient {
   language?: string;
 }
 
+export interface Patient {
+  id: string;
+  patient_name: string;
+  contact: string;
+  age: string;
+  patient_type: string;
+  created_at: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -341,6 +350,66 @@ if (typeof window !== 'undefined') {
 
 // Database API Wrapper
 export const db = {
+  async getPatients(): Promise<Patient[]> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } else {
+      return getLocalStorageData<Patient[]>('h360_patients', []);
+    }
+  },
+
+  async upsertPatients(patients: Omit<Patient, 'id' | 'created_at'>[]): Promise<void> {
+    if (patients.length === 0) return;
+    
+    if (isSupabaseConfigured && supabase) {
+      // Upsert using contact as the unique conflict target
+      const payload = patients.map(p => ({
+        patient_name: p.patient_name,
+        contact: p.contact,
+        age: p.age,
+        patient_type: p.patient_type
+      }));
+      
+      const { error } = await supabase
+        .from('patients')
+        .upsert(payload, { onConflict: 'contact' });
+        
+      if (error) throw error;
+    } else {
+      const existing = getLocalStorageData<Patient[]>('h360_patients', []);
+      let updated = false;
+      
+      for (const p of patients) {
+        const idx = existing.findIndex(e => e.contact === p.contact);
+        if (idx >= 0) {
+          // Update existing
+          if (
+            existing[idx].patient_name !== p.patient_name ||
+            existing[idx].age !== p.age ||
+            existing[idx].patient_type !== p.patient_type
+          ) {
+            existing[idx] = { ...existing[idx], ...p };
+            updated = true;
+          }
+        } else {
+          // Add new
+          existing.unshift({
+            id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            ...p,
+            created_at: new Date().toISOString()
+          });
+          updated = true;
+        }
+      }
+      
+      if (updated) {
+        setLocalStorageData('h360_patients', existing);
+      }
+    }
+  },
+
   // Projects (Patient Lists)
   async getProjects(): Promise<Project[]> {
     if (isSupabaseConfigured && supabase) {

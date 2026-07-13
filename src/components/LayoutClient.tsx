@@ -43,8 +43,9 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+  { name: 'Patient Directory', href: '/directory', icon: Users },
   { name: 'Patient Lists', href: '/projects', icon: ClipboardList },
-  { name: 'Patients / Calls', href: '/patients', icon: Users },
+  { name: 'Live Calls', href: '/patients', icon: Users },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 }
 ];
 
