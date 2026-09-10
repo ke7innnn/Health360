@@ -347,8 +347,25 @@ export async function getAndSyncCampaign(campaignId: string): Promise<{ campaign
         } else {
           campaign.failed += 1;
         }
+        campaign.in_progress = Math.max(0, campaign.in_progress - 1);
 
         saveStore(store);
+
+        if (supabase) {
+          Promise.resolve(supabase.from('calls').update({
+            status: activeCall.status,
+            duration_seconds: durationSec,
+            recording_url: activeCall.recording_url,
+            transcript: activeCall.transcript,
+          }).eq('id', activeCall.id)).catch(() => {});
+
+          Promise.resolve(supabase.from('campaigns').update({
+            completed: campaign.completed,
+            failed: campaign.failed,
+            in_progress: campaign.in_progress,
+            status: (campaign.completed + campaign.failed >= campaign.total_patients) ? 'completed' : 'in_progress',
+          }).eq('id', campaign.id)).catch(() => {});
+        }
 
         // Call ended! Automatically advance to the NEXT patient in queue!
         console.log(`[CampaignManager] Call ${activeCall.id} ended. Immediately triggering next call in queue...`);
@@ -363,9 +380,27 @@ export async function getAndSyncCampaign(campaignId: string): Promise<{ campaign
 }
 
 // ── Get All Campaigns ────────────────────────────────────────────────────────
-export function getAllCampaigns(): Campaign[] {
+export async function getAllCampaigns(): Promise<Campaign[]> {
   const store = loadStore();
-  return Object.values(store.campaigns).sort(
+  const localList = Object.values(store.campaigns);
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('campaigns').select('*').order('created_at', { ascending: false });
+      if (!error && data && data.length > 0) {
+        const map = new Map<string, Campaign>();
+        data.forEach((c: Campaign) => map.set(c.id, c));
+        localList.forEach(c => map.set(c.id, c)); // in-flight local takes priority
+        return Array.from(map.values()).sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  return localList.sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 }
@@ -404,6 +439,13 @@ export async function updateCallFromWebhook(
     foundCall.live_state = 'speaking';
     foundCall.retell_call_id = retellCallId;
     saveStore(store);
+
+    if (supabase) {
+      Promise.resolve(supabase.from('calls').update({
+        status: 'in_progress',
+        retell_call_id: retellCallId,
+      }).eq('id', foundCall.id)).catch(() => {});
+    }
     return { success: true };
   }
 
@@ -427,6 +469,24 @@ export async function updateCallFromWebhook(
       campaign.in_progress = Math.max(0, campaign.in_progress - 1);
     }
     saveStore(store);
+
+    if (supabase) {
+      Promise.resolve(supabase.from('calls').update({
+        status: foundCall.status,
+        duration_seconds: durationSec,
+        recording_url: foundCall.recording_url,
+        transcript: foundCall.transcript,
+      }).eq('id', foundCall.id)).catch(() => {});
+
+      if (campaign) {
+        Promise.resolve(supabase.from('campaigns').update({
+          completed: campaign.completed,
+          failed: campaign.failed,
+          in_progress: campaign.in_progress,
+          status: (campaign.completed + campaign.failed >= campaign.total_patients) ? 'completed' : 'in_progress',
+        }).eq('id', campaign.id)).catch(() => {});
+      }
+    }
 
     // Auto-dial next patient in queue
     console.log(`[Webhook] Call finished for ${foundCall.patient_name}. Advancing queue for campaign ${targetCampaignId}...`);
