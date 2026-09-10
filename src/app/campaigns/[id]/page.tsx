@@ -14,7 +14,8 @@ import {
   Sparkles,
   Loader2,
   Trash2,
-  Radio
+  Radio,
+  RefreshCw
 } from 'lucide-react';
 import { db, Call, Campaign } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,15 @@ export default function CampaignTrackingPage() {
   const [retryingFailed, setRetryingFailed] = useState(false);
   const [advancingQueue, setAdvancingQueue] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Retry launch state — tracks the "queuing" phase after Retry is clicked
+  // before Retell confirms the first in_progress call
+  const [retryLaunch, setRetryLaunch] = useState<{
+    active: boolean;
+    retriedCount: number;
+    elapsedSecs: number;
+  }>({ active: false, retriedCount: 0, elapsedSecs: 0 });
+  const retryLaunchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keep track of active live timer
   const [liveSeconds, setLiveSeconds] = useState(0);
@@ -53,6 +63,17 @@ export default function CampaignTrackingPage() {
           activeCallRef.current = active || null;
           if (active && active.duration_seconds !== undefined) {
             setLiveSeconds(active.duration_seconds);
+          }
+
+          // Once an in_progress call exists, clear the retry launch banner
+          if (active) {
+            setRetryLaunch(prev => {
+              if (prev.active) {
+                if (retryLaunchTimerRef.current) clearInterval(retryLaunchTimerRef.current);
+                return { active: false, retriedCount: 0, elapsedSecs: 0 };
+              }
+              return prev;
+            });
           }
           return;
         }
@@ -92,6 +113,13 @@ export default function CampaignTrackingPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // ─── Retry Launch Elapsed Timer ─────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (retryLaunchTimerRef.current) clearInterval(retryLaunchTimerRef.current);
+    };
+  }, []);
+
   // ─── Advance to Next Patient in Queue ───────────────────────────────────────
   const handleTriggerNext = async () => {
     try {
@@ -112,12 +140,43 @@ export default function CampaignTrackingPage() {
     }
   };
 
-  // ─── Bulk Retry Failed Calls ────────────────────────────────────────────────
+  // ─── Bulk Retry Failed Calls — now calls the API directly & shows launch bar ─
   const handleRetryFailed = async () => {
+    const failedCount = calls.filter(c => c.status === 'failed').length;
+    if (failedCount === 0) return;
+
     try {
       setRetryingFailed(true);
-      await db.retryFailedCampaignCalls(id);
-      toast.success('Retrying failed calls!', { description: 'Re-dialing pending queue...' });
+
+      // Call the campaign manager API (not just supabase client)
+      const res = await fetch(`/api/campaigns/${id}/retry`, { method: 'POST' });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Retry failed');
+
+      const retriedCount = data.retried_count || failedCount;
+      toast.success(`Re-launching ${retriedCount} failed call${retriedCount !== 1 ? 's' : ''}!`, {
+        description: 'Queuing all retried patients now...',
+      });
+
+      // Activate the retry launch banner
+      if (retryLaunchTimerRef.current) clearInterval(retryLaunchTimerRef.current);
+      setRetryLaunch({ active: true, retriedCount, elapsedSecs: 0 });
+
+      // Tick the elapsed seconds counter for the launch banner
+      retryLaunchTimerRef.current = setInterval(() => {
+        setRetryLaunch(prev => {
+          if (!prev.active) return prev;
+          // Auto-dismiss after 60 seconds as a failsafe
+          if (prev.elapsedSecs >= 60) {
+            if (retryLaunchTimerRef.current) clearInterval(retryLaunchTimerRef.current);
+            return { active: false, retriedCount: 0, elapsedSecs: 0 };
+          }
+          return { ...prev, elapsedSecs: prev.elapsedSecs + 1 };
+        });
+      }, 1000);
+
+      // Force immediate data refresh
       fetchCampaignAndCalls();
     } catch (err) {
       console.error(err);
@@ -241,7 +300,7 @@ export default function CampaignTrackingPage() {
               onClick={handleRetryFailed}
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              {retryingFailed ? 'Retrying...' : `Retry Failed (${failed})`}
+              {retryingFailed ? 'Launching...' : `Retry Failed (${failed})`}
             </Button>
           )}
 
@@ -257,7 +316,7 @@ export default function CampaignTrackingPage() {
         </div>
       </div>
 
-      {/* ── REAL-TIME HERO LIVE CALL BANNER ─────────────────────────────────── */}
+      {/* ── REAL-TIME HERO LIVE CALL BANNER / RETRY LAUNCH BANNER ───────────── */}
       <AnimatePresence mode="wait">
         {activeCall ? (
           <motion.div
@@ -343,6 +402,93 @@ export default function CampaignTrackingPage() {
               </div>
             </div>
           </motion.div>
+
+        ) : retryLaunch.active ? (
+          /* ── RETRY LAUNCH BANNER (shows immediately after clicking Retry Failed) ── */
+          <motion.div
+            key="retry-launch-banner"
+            initial={{ opacity: 0, y: -12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          >
+            <div className="rounded-3xl p-6 border shadow-lg relative overflow-hidden bg-gradient-to-r from-slate-950 via-rose-950 to-slate-950 text-white border-rose-500/30">
+              {/* Animated background sweep */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-rose-500/5 to-transparent animate-pulse" />
+              
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+                <div className="flex items-center gap-4">
+                  {/* Spinning retry icon */}
+                  <div className="p-4 rounded-2xl flex items-center justify-center bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                    <RefreshCw className="h-8 w-8 animate-spin" style={{ animationDuration: '1.5s' }} />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className="bg-rose-500 text-white font-extrabold uppercase text-[10px] tracking-widest animate-pulse">
+                        🔁 RETRY CAMPAIGN LAUNCHED
+                      </Badge>
+                      <span className="text-xs text-slate-400 font-mono">
+                        {retryLaunch.retriedCount} call{retryLaunch.retriedCount !== 1 ? 's' : ''} queued
+                      </span>
+                    </div>
+
+                    <h2 className="text-xl md:text-2xl font-extrabold tracking-tight text-white mt-1">
+                      Re-dialing Failed Patients
+                      <span className="text-sm font-normal text-slate-300 ml-2">
+                        (Auto-queuing all {retryLaunch.retriedCount})
+                      </span>
+                    </h2>
+
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      📡 Connecting to carrier... First call will connect shortly
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right side: elapsed timer */}
+                <div className="flex items-center gap-6 self-end md:self-center">
+                  <div className="text-right">
+                    <div className="text-2xl md:text-3xl font-mono font-bold text-white tracking-wider">
+                      {formatTime(retryLaunch.elapsedSecs)}
+                    </div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      Queue Time
+                    </p>
+                  </div>
+
+                  {pendingCalls.length > 0 && (
+                    <div className="hidden lg:block border-l border-white/10 pl-6 text-left">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        First Up:
+                      </span>
+                      <span className="text-xs font-semibold text-slate-200">
+                        {pendingCalls[0].patient_name}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 block">
+                        {pendingCalls[0].contact}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Queue progress mini-bar */}
+              <div className="mt-4 relative z-10">
+                <div className="flex justify-between text-[10px] text-slate-400 font-semibold mb-1">
+                  <span>Queuing {retryLaunch.retriedCount} retried calls...</span>
+                  <span className="animate-pulse text-rose-400">Waiting for first connection</span>
+                </div>
+                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-rose-500 to-rose-400 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, (retryLaunch.elapsedSecs / 20) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
         ) : pendingCalls.length === 0 && processed > 0 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
@@ -370,7 +516,7 @@ export default function CampaignTrackingPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-sage-600 uppercase tracking-widest bg-sage-50 px-2.5 py-0.5 rounded-full border border-sage-200">
-                  {inProgress > 0 ? 'Live In-Progress' : pendingCalls.length > 0 ? 'Ready / In Queue' : 'Completed'}
+                  {inProgress > 0 ? 'Live In-Progress' : retryLaunch.active ? 'Retry Launching' : pendingCalls.length > 0 ? 'Ready / In Queue' : 'Completed'}
                 </span>
                 <span className="text-xs text-slate-400 font-medium">
                   Created {new Date(campaign.created_at).toLocaleDateString()}
@@ -390,18 +536,19 @@ export default function CampaignTrackingPage() {
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-slate-500 font-semibold">
               <span>Patients Called: {processed} / {total}</span>
-              {inProgress > 0 && (
+              {(inProgress > 0 || retryLaunch.active) && (
                 <span className="text-blue-600 animate-pulse flex items-center gap-1 font-bold">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Calling 1 line at a time
+                  <Loader2 className="h-3 w-3 animate-spin" /> {retryLaunch.active ? 'Retrying calls...' : 'Calling 1 line at a time'}
                 </span>
               )}
             </div>
             <Progress value={progressPercent} className="h-3 bg-slate-100 [&>div]:bg-gradient-to-r [&>div]:from-sage-500 [&>div]:to-sage-600 rounded-full" />
           </div>
+
         </CardContent>
       </Card>
 
-      {/* Counters Grid */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
