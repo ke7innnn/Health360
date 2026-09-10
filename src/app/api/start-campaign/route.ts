@@ -24,6 +24,15 @@ interface PatientInput {
 
 // ─── Fire a single Retell outbound call ──────────────────────────────────────
 async function fireRetellCall(callDbId: string, campaignId: string, patient: PatientInput) {
+  let cleanNumber = patient.contact.replace(/[\s\-()]/g, '');
+  if (!cleanNumber.startsWith('+')) {
+    if (cleanNumber.length === 10) {
+      cleanNumber = `+91${cleanNumber}`;
+    } else {
+      cleanNumber = `+${cleanNumber}`;
+    }
+  }
+
   const res = await fetch('https://api.retellai.com/v2/create-phone-call', {
     method: 'POST',
     headers: {
@@ -32,7 +41,7 @@ async function fireRetellCall(callDbId: string, campaignId: string, patient: Pat
     },
     body: JSON.stringify({
       from_number: retellFromNumber,
-      to_number: patient.contact.replace(/\s+/g, ''),
+      to_number: cleanNumber,
       agent_id: retellAgentId,
       webhook_url: `${appUrl}/api/retell-callback`,
       metadata: {
@@ -41,8 +50,8 @@ async function fireRetellCall(callDbId: string, campaignId: string, patient: Pat
       },
       retell_llm_dynamic_variables: {
         patient_name: patient.patient_name,
-        patient_type: patient.patient_type,
-        patient_context: patient.context,
+        patient_type: patient.patient_type || 'General',
+        patient_context: patient.context || 'Checking on physiotherapy progress',
       },
     }),
   });
@@ -59,9 +68,6 @@ async function fireRetellCall(callDbId: string, campaignId: string, patient: Pat
 // ─── POST /api/start-campaign ─────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
-    if (!supabase) {
-      return NextResponse.json({ error: 'Supabase not configured.' }, { status: 500 });
-    }
     if (!retellApiKey || !retellFromNumber || !retellAgentId) {
       return NextResponse.json({ error: 'Retell credentials not configured.' }, { status: 500 });
     }
@@ -73,115 +79,99 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Campaign name and patients list are required.' }, { status: 400 });
     }
 
-    console.log(`[StartCampaign] Creating campaign "${name}" with ${patients.length} patients`);
+    console.log(`[StartCampaign] Starting "${name}" with ${patients.length} patients`);
 
-    // ── 1. Create campaign in Supabase ───────────────────────────────────────
-    const { data: campaign, error: campErr } = await supabase
-      .from('campaigns')
-      .insert([{
-        name,
-        total_patients: patients.length,
-        completed: 0,
-        failed: 0,
-        in_progress: 0,
-      }])
-      .select()
-      .single();
+    let campaignId = `camp_${Date.now()}`;
+    let firstCallDbId = `call_${Date.now()}_0`;
+    const firstPatient = patients[0];
 
-    if (campErr || !campaign) {
-      console.error('[StartCampaign] Failed to create campaign:', campErr);
-      return NextResponse.json({ error: 'Failed to create campaign.' }, { status: 500 });
+    // Attempt Supabase record (non-blocking)
+    if (supabase) {
+      try {
+        const { data: campaign } = await supabase
+          .from('campaigns')
+          .insert([{
+            name,
+            total_patients: patients.length,
+            completed: 0,
+            failed: 0,
+            in_progress: 1,
+          }])
+          .select()
+          .single();
+
+        if (campaign) {
+          campaignId = campaign.id;
+          const callsToInsert = patients.map((p, idx) => ({
+            campaign_id: campaign.id,
+            patient_name: p.patient_name,
+            contact: p.contact,
+            age: p.age,
+            patient_type: p.patient_type,
+            context: p.context || '',
+            language: p.language || 'English',
+            status: idx === 0 ? 'in_progress' : 'pending',
+          }));
+
+          const { data: insertedCalls } = await supabase
+            .from('calls')
+            .insert(callsToInsert)
+            .select();
+
+          if (insertedCalls && insertedCalls.length > 0) {
+            firstCallDbId = insertedCalls[0].id;
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[StartCampaign] Supabase logging warning (continuing call):', dbErr);
+      }
     }
 
-    console.log(`[StartCampaign] Campaign created: ${campaign.id}`);
-
-    // ── 2. Insert all call records as "pending" ──────────────────────────────
-    const callsToInsert = patients.map(p => ({
-      campaign_id: campaign.id,
-      patient_name: p.patient_name,
-      contact: p.contact,
-      age: p.age,
-      patient_type: p.patient_type,
-      context: p.context,
-      language: p.language || 'English',
-      status: 'pending',
-    }));
-
-    const { data: insertedCalls, error: callsErr } = await supabase
-      .from('calls')
-      .insert(callsToInsert)
-      .select();
-
-    if (callsErr || !insertedCalls || insertedCalls.length === 0) {
-      console.error('[StartCampaign] Failed to insert calls:', callsErr);
-      // Rollback campaign
-      await supabase.from('campaigns').delete().eq('id', campaign.id);
-      return NextResponse.json({ error: 'Failed to insert call records.' }, { status: 500 });
-    }
-
-    console.log(`[StartCampaign] ${insertedCalls.length} call records inserted`);
-
-    // ── 3. Fire the FIRST call to Retell ────────────────────────────────────
-    // Sort by created_at ascending to preserve CSV order
-    const firstCall = insertedCalls.sort((a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )[0];
-
+    // Always fire Retell call directly!
     try {
-      const retellCallId = await fireRetellCall(firstCall.id, campaign.id, {
-        patient_name: firstCall.patient_name,
-        contact: firstCall.contact,
-        age: firstCall.age,
-        patient_type: firstCall.patient_type,
-        context: firstCall.context,
-        language: firstCall.language,
-      });
+      console.log(`[StartCampaign] Firing Retell call to ${firstPatient.patient_name} (${firstPatient.contact})...`);
+      const retellCallId = await fireRetellCall(firstCallDbId, campaignId, firstPatient);
+      console.log(`[StartCampaign] ✓ First call fired → ${firstPatient.patient_name} | Retell ID: ${retellCallId}`);
 
-      // ── 4. Save retell_call_id immediately & mark in_progress ─────────────
-      // This is the KEY fix — we save it BEFORE any callback fires
-      await supabase
-        .from('calls')
-        .update({ status: 'in_progress', retell_call_id: retellCallId })
-        .eq('id', firstCall.id);
-
-      await supabase
-        .from('campaigns')
-        .update({ in_progress: 1 })
-        .eq('id', campaign.id);
-
-      console.log(`[StartCampaign] ✓ First call fired → ${firstCall.patient_name} | Retell ID: ${retellCallId}`);
+      if (supabase) {
+        try {
+          await supabase
+            .from('calls')
+            .update({ status: 'in_progress', retell_call_id: retellCallId })
+            .eq('id', firstCallDbId);
+        } catch {
+          // ignore
+        }
+      }
 
       return NextResponse.json({
         success: true,
-        campaign_id: campaign.id,
-        campaign_name: campaign.name,
+        campaign_id: campaignId,
+        campaign_name: name,
         total_patients: patients.length,
         first_call: {
-          db_id: firstCall.id,
+          db_id: firstCallDbId,
           retell_call_id: retellCallId,
-          patient: firstCall.patient_name,
+          patient: firstPatient.patient_name,
         },
       }, { status: 200 });
 
     } catch (retellErr: any) {
-      console.error('[StartCampaign] Failed to fire first Retell call:', retellErr.message);
+      console.error('[StartCampaign] Failed to fire Retell call:', retellErr.message);
 
-      // Mark first call as failed, campaign still created
-      await supabase
-        .from('calls')
-        .update({ status: 'failed' })
-        .eq('id', firstCall.id);
-
-      await supabase
-        .from('campaigns')
-        .update({ failed: 1 })
-        .eq('id', campaign.id);
+      if (supabase) {
+        try {
+          await supabase.from('calls').update({ status: 'failed' }).eq('id', firstCallDbId);
+          await supabase.from('campaigns').update({ failed: 1, in_progress: 0 }).eq('id', campaignId);
+        } catch {
+          // ignore
+        }
+      }
 
       return NextResponse.json({
-        success: true,
-        campaign_id: campaign.id,
-        warning: `Campaign created but first call failed: ${retellErr.message}`,
-      }, { status: 200 });
+        success: false,
+        error: `Retell dialer error: ${retellErr.message}`,
+      }, { status: 502 });
     }
 
   } catch (error: any) {
