@@ -292,7 +292,9 @@ export default function CampaignTrackingPage() {
                         ? 'bg-emerald-500 text-slate-950 font-extrabold uppercase text-[10px] tracking-widest'
                         : 'bg-amber-500 text-slate-950 font-extrabold uppercase text-[10px] tracking-widest'
                       }>
-                        {activeLiveState === 'speaking' ? '🗣️ CALL CONNECTED · SPEAKING' : '🔔 RINGING PATIENT NOW...'}
+                        {activeLiveState === 'speaking'
+                          ? '🗣️ CALL CONNECTED · SPEAKING'
+                          : (liveSeconds < 12 ? '📡 CONNECTING TO CARRIER...' : '🔔 RINGING PATIENT HANDSET...')}
                       </Badge>
 
                       <span className="text-xs text-slate-400 font-mono">
@@ -478,7 +480,7 @@ export default function CampaignTrackingPage() {
                   statusBorder = 'border-amber-400 ring-2 ring-amber-400/20 bg-amber-50/20';
                   statusBadge = (
                     <span className="text-[10px] font-extrabold text-amber-600 animate-pulse flex items-center gap-1">
-                      🔔 RINGING PHONE...
+                      {liveSeconds < 12 ? '📡 CONNECTING...' : '🔔 RINGING HANDSET...'}
                     </span>
                   );
                 }
