@@ -133,6 +133,8 @@ const notifySubscribers = (event: string, table: string, record: any) => {
   subscribers.forEach(cb => cb({ event, table, record }));
 };
 
+import INITIAL_PATIENTS from './all_patients.json';
+
 // INITIAL SEED MOCK DATA
 const seedMockData = () => {
   if (typeof window === 'undefined') return;
@@ -141,17 +143,8 @@ const seedMockData = () => {
   const calls = getLocalStorageData<Call[]>('h360_calls', []);
   const patients = getLocalStorageData<Patient[]>('h360_patients', []);
 
-  if (patients.length === 0) {
-    const initialPatients: Patient[] = [
-      { id: 'pat_1', patient_name: 'Rahul Sharma', contact: '+91 98765 43210', age: '45', patient_type: 'Knee Pain', created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
-      { id: 'pat_2', patient_name: 'Sunita Patil', contact: '+91 98234 56789', age: '62', patient_type: 'Knee Pain', created_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString() },
-      { id: 'pat_3', patient_name: 'David Miller', contact: '+91 99112 23344', age: '38', patient_type: 'Frozen Shoulder', created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
-      { id: 'pat_4', patient_name: 'Anjali Deshmukh', contact: '+91 88776 65544', age: '29', patient_type: 'Post-Sprain Rehab', created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-      { id: 'pat_5', patient_name: 'Karan Malhotra', contact: '+91 90088 77665', age: '54', patient_type: 'Lower Back Pain', created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
-      { id: 'pat_6', patient_name: 'Yohann', contact: '+91 88065 77475', age: '32', patient_type: 'Knee Pain', created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() },
-      { id: 'pat_7', patient_name: 'Prakash Rajpurohit', contact: '+91 99203 17411', age: '50', patient_type: 'Cervical Spondylosis', created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }
-    ];
-    setLocalStorageData('h360_patients', initialPatients);
+  if (patients.length < 10) {
+    setLocalStorageData('h360_patients', INITIAL_PATIENTS as Patient[]);
   }
 
   if (campaigns.length === 0) {
