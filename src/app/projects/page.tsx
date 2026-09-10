@@ -12,7 +12,7 @@ import {
   Trash2,
   Edit2
 } from 'lucide-react';
-import { db, isSupabaseConfigured, subscribeToRealtime, Project } from '@/lib/supabase';
+import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Project } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -58,15 +58,15 @@ export default function ProjectsPage() {
 
     // Subscribe to realtime database changes (Mock or Supabase)
     let unsubscribe: () => void;
-    if (isSupabaseConfigured && db) {
-      const channel = (db as any).supabase?.channel('projects-list')
-        .on('postgres_changes', { event: '*', table: 'projects' }, () => {
+    if (isSupabaseConfigured && supabase) {
+      const channel = supabase.channel('projects-list')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
           fetchProjects();
         })
         .subscribe();
 
       unsubscribe = () => {
-        channel?.unsubscribe();
+        channel.unsubscribe();
       };
     } else {
       unsubscribe = subscribeToRealtime((payload) => {

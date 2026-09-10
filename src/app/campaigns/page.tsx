@@ -15,7 +15,7 @@ import {
   Inbox,
   Trash2
 } from 'lucide-react';
-import { db, isSupabaseConfigured, subscribeToRealtime, Campaign } from '@/lib/supabase';
+import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Campaign } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -64,15 +64,15 @@ export default function CampaignsPage() {
 
     // Subscribe to realtime database changes (Mock or Supabase)
     let unsubscribe: () => void;
-    if (isSupabaseConfigured && db) {
-      const channel = (db as any).supabase?.channel('campaigns-list')
-        .on('postgres_changes', { event: '*', table: 'campaigns' }, () => {
+    if (isSupabaseConfigured && supabase) {
+      const channel = supabase.channel('campaigns-list')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'campaigns' }, () => {
           fetchCampaigns();
         })
         .subscribe();
 
       unsubscribe = () => {
-        channel?.unsubscribe();
+        channel.unsubscribe();
       };
     } else {
       unsubscribe = subscribeToRealtime((payload) => {

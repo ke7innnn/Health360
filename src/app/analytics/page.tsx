@@ -25,7 +25,7 @@ import {
   Calendar,
   Award
 } from 'lucide-react';
-import { db, isSupabaseConfigured, subscribeToRealtime, Call } from '@/lib/supabase';
+import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Call } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 
@@ -50,15 +50,15 @@ export default function AnalyticsPage() {
 
     // Subscribe to updates
     let unsubscribe: () => void;
-    if (isSupabaseConfigured && db) {
-      const channel = (db as any).supabase?.channel('analytics-updates')
-        .on('postgres_changes', { event: '*', table: 'calls' }, () => {
+    if (isSupabaseConfigured && supabase) {
+      const channel = supabase.channel('analytics-updates')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, () => {
           fetchCallsData();
         })
         .subscribe();
       
       unsubscribe = () => {
-        channel?.unsubscribe();
+        channel.unsubscribe();
       };
     } else {
       unsubscribe = subscribeToRealtime((payload) => {

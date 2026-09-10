@@ -21,7 +21,7 @@ import {
   LogOut,
   ClipboardList
 } from 'lucide-react';
-import { db, isSupabaseConfigured, subscribeToRealtime } from '@/lib/supabase';
+import { db, supabase, isSupabaseConfigured, subscribeToRealtime } from '@/lib/supabase';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 
@@ -124,16 +124,16 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
 
     // Subscribe to realtime updates (works for mock/Supabase)
     let unsubscribe: () => void;
-    if (isSupabaseConfigured && db) {
+    if (isSupabaseConfigured && supabase) {
       // For Supabase
-      const channel = (db as any).supabase?.channel('layout-active-calls')
-        .on('postgres_changes', { event: '*', filter: 'status=eq.in_progress', table: 'calls' }, () => {
+      const channel = supabase.channel('layout-active-calls')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, () => {
           fetchActiveCalls();
         })
         .subscribe();
       
       unsubscribe = () => {
-        channel?.unsubscribe();
+        channel.unsubscribe();
       };
     } else {
       // For Local Mock

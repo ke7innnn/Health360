@@ -101,13 +101,21 @@ const MOCK_RECORDINGS = [
 // Helper to load mock data from localStorage
 const getLocalStorageData = <T>(key: string, defaultValue: T): T => {
   if (typeof window === 'undefined') return defaultValue;
-  const stored = localStorage.getItem(key);
-  return stored ? JSON.parse(stored) : defaultValue;
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : defaultValue;
+  } catch (e) {
+    return defaultValue;
+  }
 };
 
 const setLocalStorageData = <T>(key: string, data: T): void => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(key, JSON.stringify(data));
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error('LocalStorage write error:', e);
+  }
 };
 
 // Global subscription registry for Mock Realtime
@@ -131,6 +139,20 @@ const seedMockData = () => {
   
   const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
   const calls = getLocalStorageData<Call[]>('h360_calls', []);
+  const patients = getLocalStorageData<Patient[]>('h360_patients', []);
+
+  if (patients.length === 0) {
+    const initialPatients: Patient[] = [
+      { id: 'pat_1', patient_name: 'Rahul Sharma', contact: '+91 98765 43210', age: '45', patient_type: 'Knee Pain', created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
+      { id: 'pat_2', patient_name: 'Sunita Patil', contact: '+91 98234 56789', age: '62', patient_type: 'Knee Pain', created_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString() },
+      { id: 'pat_3', patient_name: 'David Miller', contact: '+91 99112 23344', age: '38', patient_type: 'Frozen Shoulder', created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
+      { id: 'pat_4', patient_name: 'Anjali Deshmukh', contact: '+91 88776 65544', age: '29', patient_type: 'Post-Sprain Rehab', created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+      { id: 'pat_5', patient_name: 'Karan Malhotra', contact: '+91 90088 77665', age: '54', patient_type: 'Lower Back Pain', created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
+      { id: 'pat_6', patient_name: 'Yohann', contact: '+91 88065 77475', age: '32', patient_type: 'Knee Pain', created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() },
+      { id: 'pat_7', patient_name: 'Prakash Rajpurohit', contact: '+91 99203 17411', age: '50', patient_type: 'Cervical Spondylosis', created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }
+    ];
+    setLocalStorageData('h360_patients', initialPatients);
+  }
 
   if (campaigns.length === 0) {
     const initialCampaigns: Campaign[] = [
@@ -155,7 +177,6 @@ const seedMockData = () => {
     ];
 
     const initialCalls: Call[] = [
-      // c1 Calls
       {
         id: 'call1',
         campaign_id: 'c1',
@@ -202,7 +223,6 @@ const seedMockData = () => {
         transcript: '',
         created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString()
       },
-      // Seed remaining completed calls
       ...Array.from({ length: 6 }).map((_, i) => ({
         id: `c1_auto_${i}`,
         campaign_id: 'c1',
@@ -219,8 +239,6 @@ const seedMockData = () => {
         transcript: i === 5 ? '' : (MOCK_TRANSCRIPTS as any)[LANGUAGES[i % LANGUAGES.length]],
         created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 + (40 + i * 10) * 60 * 1000).toISOString()
       })),
-      
-      // c2 Calls
       {
         id: 'call_c2_1',
         campaign_id: 'c2',
@@ -278,164 +296,112 @@ const seedMockData = () => {
 // Execute seed
 seedMockData();
 
-// Mock Simulation Logic: Periodically runs in background to progress any active/pending calls in active campaigns
-if (typeof window !== 'undefined') {
-  setInterval(() => {
-    const calls = getLocalStorageData<Call[]>('h360_calls', []);
-    const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+// Helper to safely execute Supabase queries with strict timeout and fallback to localStorage cache
+async function safeQuery<T>(
+  queryFn: () => Promise<{ data: T | null; error: any }>,
+  fallbackFn: () => T,
+  storageKey?: string,
+  timeoutMs: number = 2500
+): Promise<T> {
+  if (!isSupabaseConfigured || !supabase) {
+    return fallbackFn();
+  }
 
-    let updated = false;
+  try {
+    const timeoutPromise = new Promise<{ data: null; error: Error }>((_, reject) =>
+      setTimeout(() => reject(new Error('Supabase query timeout')), timeoutMs)
+    );
 
-    // 1. Process "in_progress" calls to make them complete or fail
-    const callsInProgress = calls.filter(c => c.status === 'in_progress');
-    callsInProgress.forEach(call => {
-      // 20% chance to finish this tick
-      if (Math.random() < 0.3) {
-        const isSuccess = Math.random() > 0.15; // 85% success rate
-        call.status = isSuccess ? 'completed' : 'failed';
-        call.duration_seconds = isSuccess ? Math.floor(Math.random() * 80) + 30 : 0;
-        call.recording_url = isSuccess ? MOCK_RECORDINGS[Math.floor(Math.random() * MOCK_RECORDINGS.length)] : '';
-        call.language = call.language || LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)];
-        call.transcript = isSuccess ? (MOCK_TRANSCRIPTS as any)[call.language] : '';
-        call.sentiment = isSuccess ? SENTIMENTS[Math.floor(Math.random() * SENTIMENTS.length)] : undefined;
-        
-        // Update campaign counts
-        if (call.campaign_id) {
-          const camp = campaigns.find(c => c.id === call.campaign_id);
-          if (camp) {
-            camp.in_progress = Math.max(0, camp.in_progress - 1);
-            if (isSuccess) {
-              camp.completed += 1;
-            } else {
-              camp.failed += 1;
-            }
-          }
-        }
-        updated = true;
-        notifySubscribers('UPDATE', 'calls', call);
-      }
-    });
-
-    // 2. Process "pending" calls to initiate call (make in_progress)
-    // Only process if total in_progress calls in workspace is < 3 (simulating limited dialer channels)
-    const currentTotalInProgress = calls.filter(c => c.status === 'in_progress').length;
-    if (currentTotalInProgress < 3) {
-      const pendingCall = calls.find(c => c.status === 'pending');
-      if (pendingCall) {
-        pendingCall.status = 'in_progress';
-        pendingCall.duration_seconds = 1; // starts counting
-        pendingCall.language = pendingCall.language || LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)];
-        
-        // Update campaign counts
-        if (pendingCall.campaign_id) {
-          const camp = campaigns.find(c => c.id === pendingCall.campaign_id);
-          if (camp) {
-            camp.in_progress += 1;
-          }
-        }
-        updated = true;
-        notifySubscribers('UPDATE', 'calls', pendingCall);
-      }
+    const result = await Promise.race([queryFn(), timeoutPromise]);
+    if (result.error || !result.data) {
+      console.warn('[Supabase] Query error/empty, using fallback:', result.error?.message || 'No data');
+      return fallbackFn();
     }
-
-    if (updated) {
-      setLocalStorageData('h360_calls', calls);
-      setLocalStorageData('h360_campaigns', campaigns);
-      
-      // Also notify full tables updated
-      notifySubscribers('REFRESH', 'all', null);
+    // Update local cache if storageKey provided
+    if (storageKey && Array.isArray(result.data) && result.data.length > 0) {
+      setLocalStorageData(storageKey, result.data);
     }
-  }, 4000); // Check every 4 seconds
+    return result.data;
+  } catch (err: any) {
+    console.warn('[Supabase] Fetch failed or timed out, using fallback cache:', err?.message || err);
+    return fallbackFn();
+  }
 }
 
 // Database API Wrapper
 export const db = {
   async getPatients(): Promise<Patient[]> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    } else {
-      return getLocalStorageData<Patient[]>('h360_patients', []);
-    }
+    return safeQuery(
+      async () => {
+        const { data, error } = await supabase!.from('patients').select('*').order('created_at', { ascending: false });
+        return { data, error };
+      },
+      () => getLocalStorageData<Patient[]>('h360_patients', []),
+      'h360_patients'
+    );
   },
 
   async upsertPatients(patients: Omit<Patient, 'id' | 'created_at'>[]): Promise<void> {
     if (patients.length === 0) return;
     
-    if (isSupabaseConfigured && supabase) {
-      // Upsert using contact as the unique conflict target
-      const payload = patients.map(p => ({
-        patient_name: p.patient_name,
-        contact: p.contact,
-        age: p.age,
-        patient_type: p.patient_type
-      }));
-      
-      const { error } = await supabase
-        .from('patients')
-        .upsert(payload, { onConflict: 'contact' });
-        
-      if (error) throw error;
-    } else {
-      const existing = getLocalStorageData<Patient[]>('h360_patients', []);
-      let updated = false;
-      
-      for (const p of patients) {
-        const idx = existing.findIndex(e => e.contact === p.contact);
-        if (idx >= 0) {
-          // Update existing
-          if (
-            existing[idx].patient_name !== p.patient_name ||
-            existing[idx].age !== p.age ||
-            existing[idx].patient_type !== p.patient_type
-          ) {
-            existing[idx] = { ...existing[idx], ...p };
-            updated = true;
-          }
-        } else {
-          // Add new
-          existing.unshift({
-            id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-            ...p,
-            created_at: new Date().toISOString()
-          });
-          updated = true;
-        }
+    // Always update local storage first for instant UI response
+    const existing = getLocalStorageData<Patient[]>('h360_patients', []);
+    for (const p of patients) {
+      const idx = existing.findIndex(e => e.contact === p.contact);
+      if (idx >= 0) {
+        existing[idx] = { ...existing[idx], ...p };
+      } else {
+        existing.unshift({
+          id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          ...p,
+          created_at: new Date().toISOString()
+        });
       }
-      
-      if (updated) {
-        setLocalStorageData('h360_patients', existing);
+    }
+    setLocalStorageData('h360_patients', existing);
+    notifySubscribers('REFRESH', 'patients', null);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload = patients.map(p => ({
+          patient_name: p.patient_name,
+          contact: p.contact,
+          age: p.age,
+          patient_type: p.patient_type
+        }));
+        await supabase.from('patients').upsert(payload, { onConflict: 'contact' });
+      } catch (e) {
+        console.warn('[Supabase] Non-blocking upsert error:', e);
       }
     }
   },
 
   // Projects (Patient Lists)
   async getProjects(): Promise<Project[]> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-      if (!error && data) return data;
-      // If table doesn't exist, error will be populated. Fall back to local storage silently.
-    }
-    return getLocalStorageData<Project[]>('h360_projects', []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return safeQuery(
+      async () => {
+        const { data, error } = await supabase!.from('projects').select('*').order('created_at', { ascending: false });
+        return { data, error };
+      },
+      () => getLocalStorageData<Project[]>('h360_projects', []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      'h360_projects'
+    );
   },
 
   async getProject(id: string): Promise<Project | null> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('projects').select('*').eq('id', id).single();
-      if (!error && data) return data;
-    }
-    const projects = getLocalStorageData<Project[]>('h360_projects', []);
-    return projects.find(p => p.id === id) || null;
+    return safeQuery(
+      async () => {
+        const { data, error } = await supabase!.from('projects').select('*').eq('id', id).single();
+        return { data, error };
+      },
+      () => {
+        const projects = getLocalStorageData<Project[]>('h360_projects', []);
+        return projects.find(p => p.id === id) || null;
+      }
+    );
   },
 
   async createProject(name: string, patients: ProjectPatient[]): Promise<Project> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('projects').insert([{ name, patients }]).select().single();
-      if (!error && data) return data;
-    }
-    
-    // Fallback Local Storage
     const newProject: Project = {
       id: `proj_${Date.now()}`,
       name,
@@ -443,330 +409,316 @@ export const db = {
       created_at: new Date().toISOString()
     };
     const projects = getLocalStorageData<Project[]>('h360_projects', []);
-    projects.push(newProject);
+    projects.unshift(newProject);
     setLocalStorageData('h360_projects', projects);
     notifySubscribers('INSERT', 'projects', newProject);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase.from('projects').insert([{ name, patients }]).select().single();
+        if (data) return data;
+      } catch (e) {
+        console.warn('[Supabase] Project insert error:', e);
+      }
+    }
     return newProject;
   },
 
   async updateProject(id: string, name: string, patients: ProjectPatient[]): Promise<Project> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('projects').update({ name, patients }).eq('id', id).select().single();
-      if (!error && data) return data;
-    }
-    
-    // Fallback Local Storage
     const projects = getLocalStorageData<Project[]>('h360_projects', []);
     const idx = projects.findIndex(p => p.id === id);
+    let updatedProj = projects[idx] || { id, name, patients, created_at: new Date().toISOString() };
     if (idx !== -1) {
       projects[idx] = { ...projects[idx], name, patients };
+      updatedProj = projects[idx];
       setLocalStorageData('h360_projects', projects);
-      notifySubscribers('UPDATE', 'projects', projects[idx]);
-      return projects[idx];
+      notifySubscribers('UPDATE', 'projects', updatedProj);
     }
-    throw new Error('Project not found');
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase.from('projects').update({ name, patients }).eq('id', id).select().single();
+        if (data) return data;
+      } catch (e) {
+        console.warn('[Supabase] Project update error:', e);
+      }
+    }
+    return updatedProj;
   },
 
   async deleteProject(id: string): Promise<void> {
-    if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('projects').delete().eq('id', id);
-      if (!error) return;
-    }
-    
     const projects = getLocalStorageData<Project[]>('h360_projects', []);
     setLocalStorageData('h360_projects', projects.filter(p => p.id !== id));
     notifySubscribers('REFRESH', 'all', null);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('projects').delete().eq('id', id);
+      } catch (e) {
+        console.warn('[Supabase] Project delete error:', e);
+      }
+    }
   },
 
   // Campaigns
   async getCampaigns(): Promise<Campaign[]> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('campaigns').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    }
-    return getLocalStorageData<Campaign[]>('h360_campaigns', []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return safeQuery(
+      async () => {
+        const { data, error } = await supabase!.from('campaigns').select('*').order('created_at', { ascending: false });
+        return { data, error };
+      },
+      () => getLocalStorageData<Campaign[]>('h360_campaigns', []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      'h360_campaigns'
+    );
   },
 
   async getCampaign(id: string): Promise<Campaign | null> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('campaigns').select('*').eq('id', id).single();
-      if (error) throw error;
-      return data;
-    }
-    const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
-    return campaigns.find(c => c.id === id) || null;
+    return safeQuery(
+      async () => {
+        const { data, error } = await supabase!.from('campaigns').select('*').eq('id', id).single();
+        return { data, error };
+      },
+      () => {
+        const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+        return campaigns.find(c => c.id === id) || null;
+      }
+    );
   },
 
   async deleteCampaign(id: string): Promise<void> {
+    const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+    const calls = getLocalStorageData<Call[]>('h360_calls', []);
+    setLocalStorageData('h360_campaigns', campaigns.filter(c => c.id !== id));
+    setLocalStorageData('h360_calls', calls.filter(c => c.campaign_id !== id));
+    notifySubscribers('REFRESH', 'all', null);
+
     if (isSupabaseConfigured && supabase) {
-      // Delete calls related to this campaign first to avoid FK constraint issues
-      const { error: callsError } = await supabase.from('calls').delete().eq('campaign_id', id);
-      if (callsError) throw callsError;
-
-      // Delete the campaign itself
-      const { error: campError } = await supabase.from('campaigns').delete().eq('id', id);
-      if (campError) throw campError;
-    } else {
-      const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
-      const calls = getLocalStorageData<Call[]>('h360_calls', []);
-
-      const updatedCampaigns = campaigns.filter(c => c.id !== id);
-      const updatedCalls = calls.filter(c => c.campaign_id !== id);
-
-      setLocalStorageData('h360_campaigns', updatedCampaigns);
-      setLocalStorageData('h360_calls', updatedCalls);
-      notifySubscribers('REFRESH', 'all', null);
+      try {
+        await supabase.from('calls').delete().eq('campaign_id', id);
+        await supabase.from('campaigns').delete().eq('id', id);
+      } catch (e) {
+        console.warn('[Supabase] Campaign delete error:', e);
+      }
     }
   },
-
 
   async createCampaign(name: string, patients: Omit<Call, 'id' | 'status' | 'created_at'>[]): Promise<Campaign> {
     if (isSupabaseConfigured && supabase) {
-      // Delegate everything to /api/start-campaign which:
-      //   1. Creates the campaign in Supabase
-      //   2. Inserts all call records as 'pending'
-      //   3. Fires first Retell call & saves retell_call_id immediately
-      const res = await fetch('/api/start-campaign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, patients }),
-      });
+      try {
+        const res = await fetch('/api/start-campaign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, patients }),
+        });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to start campaign');
+        if (res.ok) {
+          const result = await res.json();
+          const { data: campData } = await supabase
+            .from('campaigns')
+            .select('*')
+            .eq('id', result.campaign_id)
+            .single();
+
+          if (campData) return campData;
+        }
+      } catch (e) {
+        console.warn('[StartCampaign API] Cloud start error, fallback to local:', e);
       }
-
-      const result = await res.json();
-
-      // Return the newly created campaign from Supabase
-      const { data: campData, error } = await supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', result.campaign_id)
-        .single();
-
-      if (error || !campData) throw new Error('Campaign created but could not fetch it.');
-      return campData;
-
-    } else {
-      // ── Local mock mode (no Supabase) ─────────────────────────────────────
-      const campaignId = `camp_${Date.now()}`;
-      const total = patients.length;
-
-      const newCamp: Campaign = {
-        id: campaignId,
-        name,
-        total_patients: total,
-        completed: 0,
-        failed: 0,
-        in_progress: 0,
-        created_at: new Date().toISOString()
-      };
-
-      const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
-      campaigns.push(newCamp);
-      setLocalStorageData('h360_campaigns', campaigns);
-
-      const newCalls: Call[] = patients.map((p, idx) => ({
-        id: `call_${Date.now()}_${idx}`,
-        campaign_id: newCamp.id,
-        patient_name: p.patient_name,
-        contact: p.contact,
-        age: p.age,
-        patient_type: p.patient_type,
-        context: p.context,
-        language: p.language || LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)],
-        status: 'pending',
-        created_at: new Date().toISOString()
-      }));
-
-      const calls = getLocalStorageData<Call[]>('h360_calls', []);
-      setLocalStorageData('h360_calls', [...calls, ...newCalls]);
-
-      notifySubscribers('INSERT', 'campaigns', newCamp);
-      return newCamp;
     }
+
+    // Local fallback creation
+    const campaignId = `camp_${Date.now()}`;
+    const total = patients.length;
+
+    const newCamp: Campaign = {
+      id: campaignId,
+      name,
+      total_patients: total,
+      completed: 0,
+      failed: 0,
+      in_progress: 0,
+      created_at: new Date().toISOString()
+    };
+
+    const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+    campaigns.unshift(newCamp);
+    setLocalStorageData('h360_campaigns', campaigns);
+
+    const newCalls: Call[] = patients.map((p, idx) => ({
+      id: `call_${Date.now()}_${idx}`,
+      campaign_id: newCamp.id,
+      patient_name: p.patient_name,
+      contact: p.contact,
+      age: p.age,
+      patient_type: p.patient_type,
+      context: p.context,
+      language: p.language || LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)],
+      status: 'pending',
+      created_at: new Date().toISOString()
+    }));
+
+    const calls = getLocalStorageData<Call[]>('h360_calls', []);
+    setLocalStorageData('h360_calls', [...newCalls, ...calls]);
+
+    notifySubscribers('INSERT', 'campaigns', newCamp);
+    return newCamp;
   },
 
   async retryFailedCampaignCalls(campaignId: string): Promise<void> {
-    if (isSupabaseConfigured && supabase) {
-      // 1. Get failed calls
-      const { data: failedCalls } = await supabase
-        .from('calls')
-        .select('id')
-        .eq('campaign_id', campaignId)
-        .eq('status', 'failed');
+    const calls = getLocalStorageData<Call[]>('h360_calls', []);
+    const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
 
-      if (failedCalls && failedCalls.length > 0) {
-        const ids = failedCalls.map(c => c.id);
-        
-        // 2. Set back to pending
-        await supabase.from('calls').update({ status: 'pending' }).in('id', ids);
-
-        // 3. Decrement campaign failed count and update in_progress if needed
-        const { data: camp } = await supabase.from('campaigns').select('*').eq('id', campaignId).single();
-        if (camp) {
-          await supabase.from('campaigns').update({
-            failed: Math.max(0, camp.failed - ids.length)
-          }).eq('id', campaignId);
+    const failedCount = calls.filter(c => c.campaign_id === campaignId && c.status === 'failed').length;
+    if (failedCount > 0) {
+      calls.forEach(c => {
+        if (c.campaign_id === campaignId && c.status === 'failed') {
+          c.status = 'pending';
         }
+      });
+      const camp = campaigns.find(c => c.id === campaignId);
+      if (camp) {
+        camp.failed = Math.max(0, camp.failed - failedCount);
       }
-    } else {
-      const calls = getLocalStorageData<Call[]>('h360_calls', []);
-      const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+      setLocalStorageData('h360_calls', calls);
+      setLocalStorageData('h360_campaigns', campaigns);
+      notifySubscribers('REFRESH', 'all', null);
+    }
 
-      const failedCount = calls.filter(c => c.campaign_id === campaignId && c.status === 'failed').length;
-      if (failedCount > 0) {
-        calls.forEach(c => {
-          if (c.campaign_id === campaignId && c.status === 'failed') {
-            c.status = 'pending';
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: failedCalls } = await supabase
+          .from('calls')
+          .select('id')
+          .eq('campaign_id', campaignId)
+          .eq('status', 'failed');
+
+        if (failedCalls && failedCalls.length > 0) {
+          const ids = failedCalls.map(c => c.id);
+          await supabase.from('calls').update({ status: 'pending' }).in('id', ids);
+          const { data: camp } = await supabase.from('campaigns').select('*').eq('id', campaignId).single();
+          if (camp) {
+            await supabase.from('campaigns').update({
+              failed: Math.max(0, camp.failed - ids.length)
+            }).eq('id', campaignId);
           }
-        });
-
-        const camp = campaigns.find(c => c.id === campaignId);
-        if (camp) {
-          camp.failed = Math.max(0, camp.failed - failedCount);
         }
-
-        setLocalStorageData('h360_calls', calls);
-        setLocalStorageData('h360_campaigns', campaigns);
-        notifySubscribers('REFRESH', 'all', null);
+      } catch (e) {
+        console.warn('[Supabase] Retry campaign error:', e);
       }
     }
   },
 
   async retryAllFailedCalls(): Promise<void> {
-    if (isSupabaseConfigured && supabase) {
-      const { data: failedCalls } = await supabase.from('calls').select('id, campaign_id').eq('status', 'failed');
-      if (failedCalls && failedCalls.length > 0) {
-        const ids = failedCalls.map(c => c.id);
-        await supabase.from('calls').update({ status: 'pending' }).in('id', ids);
+    const calls = getLocalStorageData<Call[]>('h360_calls', []);
+    const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
 
-        // Group by campaign to reset stats
-        const campaignMap: Record<string, number> = {};
-        failedCalls.forEach(c => {
-          if (c.campaign_id) {
-            campaignMap[c.campaign_id] = (campaignMap[c.campaign_id] || 0) + 1;
-          }
-        });
-
-        for (const [campId, count] of Object.entries(campaignMap)) {
-          const { data: camp } = await supabase.from('campaigns').select('failed').eq('id', campId).single();
-          if (camp) {
-            await supabase.from('campaigns').update({ failed: Math.max(0, camp.failed - count) }).eq('id', campId);
-          }
-        }
+    let updated = false;
+    campaigns.forEach(camp => {
+      const count = calls.filter(c => c.campaign_id === camp.id && c.status === 'failed').length;
+      if (count > 0) {
+        camp.failed = Math.max(0, camp.failed - count);
+        updated = true;
       }
-    } else {
-      const calls = getLocalStorageData<Call[]>('h360_calls', []);
-      const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+    });
 
-      let updated = false;
-      campaigns.forEach(camp => {
-        const count = calls.filter(c => c.campaign_id === camp.id && c.status === 'failed').length;
-        if (count > 0) {
-          camp.failed = Math.max(0, camp.failed - count);
-          updated = true;
+    calls.forEach(c => {
+      if (c.status === 'failed') {
+        c.status = 'pending';
+        updated = true;
+      }
+    });
+
+    if (updated) {
+      setLocalStorageData('h360_calls', calls);
+      setLocalStorageData('h360_campaigns', campaigns);
+      notifySubscribers('REFRESH', 'all', null);
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: failedCalls } = await supabase.from('calls').select('id, campaign_id').eq('status', 'failed');
+        if (failedCalls && failedCalls.length > 0) {
+          const ids = failedCalls.map(c => c.id);
+          await supabase.from('calls').update({ status: 'pending' }).in('id', ids);
         }
-      });
-
-      calls.forEach(c => {
-        if (c.status === 'failed') {
-          c.status = 'pending';
-          updated = true;
-        }
-      });
-
-      if (updated) {
-        setLocalStorageData('h360_calls', calls);
-        setLocalStorageData('h360_campaigns', campaigns);
-        notifySubscribers('REFRESH', 'all', null);
+      } catch (e) {
+        console.warn('[Supabase] Retry all error:', e);
       }
     }
   },
 
   // Calls
   async getCalls(): Promise<Call[]> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('calls').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    }
-    return getLocalStorageData<Call[]>('h360_calls', []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return safeQuery(
+      async () => {
+        const { data, error } = await supabase!.from('calls').select('*').order('created_at', { ascending: false });
+        return { data, error };
+      },
+      () => getLocalStorageData<Call[]>('h360_calls', []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      'h360_calls'
+    );
   },
 
   async getCall(id: string): Promise<Call | null> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('calls').select('*').eq('id', id).single();
-      if (error) throw error;
-      return data;
-    }
-    const calls = getLocalStorageData<Call[]>('h360_calls', []);
-    return calls.find(c => c.id === id) || null;
+    return safeQuery(
+      async () => {
+        const { data, error } = await supabase!.from('calls').select('*').eq('id', id).single();
+        return { data, error };
+      },
+      () => {
+        const calls = getLocalStorageData<Call[]>('h360_calls', []);
+        return calls.find(c => c.id === id) || null;
+      }
+    );
   },
 
   async getCampaignCalls(campaignId: string): Promise<Call[]> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('calls').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    }
-    const calls = getLocalStorageData<Call[]>('h360_calls', []);
-    return calls.filter(c => c.campaign_id === campaignId);
+    return safeQuery(
+      async () => {
+        const { data, error } = await supabase!.from('calls').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true });
+        return { data, error };
+      },
+      () => {
+        const calls = getLocalStorageData<Call[]>('h360_calls', []);
+        return calls.filter(c => c.campaign_id === campaignId);
+      }
+    );
   },
 
   async triggerSingleCall(callId: string): Promise<void> {
     let callRecord: Call | null = null;
-    
-    if (isSupabaseConfigured && supabase) {
-      const { data } = await supabase.from('calls').select('*').eq('id', callId).single();
-      if (data) {
-        callRecord = data;
-        await supabase.from('calls').update({ status: 'pending' }).eq('id', callId);
-        
-        // If part of campaign, decrement failed/completed if we're calling again
-        if (data.campaign_id) {
-          const { data: camp } = await supabase.from('campaigns').select('*').eq('id', data.campaign_id).single();
-          if (camp) {
-            const updateObj: any = {};
-            if (data.status === 'completed') updateObj.completed = Math.max(0, camp.completed - 1);
-            if (data.status === 'failed') updateObj.failed = Math.max(0, camp.failed - 1);
-            if (Object.keys(updateObj).length > 0) {
-              await supabase.from('campaigns').update(updateObj).eq('id', data.campaign_id);
-            }
-          }
+
+    const calls = getLocalStorageData<Call[]>('h360_calls', []);
+    const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+    const call = calls.find(c => c.id === callId);
+    if (call) {
+      callRecord = call;
+      if (call.campaign_id) {
+        const camp = campaigns.find(c => c.id === call.campaign_id);
+        if (camp) {
+          if (call.status === 'completed') camp.completed = Math.max(0, camp.completed - 1);
+          if (call.status === 'failed') camp.failed = Math.max(0, camp.failed - 1);
         }
       }
-    } else {
-      const calls = getLocalStorageData<Call[]>('h360_calls', []);
-      const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
-      const call = calls.find(c => c.id === callId);
-      if (call) {
-        callRecord = call;
-        
-        if (call.campaign_id) {
-          const camp = campaigns.find(c => c.id === call.campaign_id);
-          if (camp) {
-            if (call.status === 'completed') camp.completed = Math.max(0, camp.completed - 1);
-            if (call.status === 'failed') camp.failed = Math.max(0, camp.failed - 1);
-          }
+      call.status = 'pending';
+      setLocalStorageData('h360_calls', calls);
+      setLocalStorageData('h360_campaigns', campaigns);
+      notifySubscribers('UPDATE', 'calls', call);
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase.from('calls').select('*').eq('id', callId).single();
+        if (data) {
+          callRecord = data;
+          await supabase.from('calls').update({ status: 'pending' }).eq('id', callId);
         }
-        
-        call.status = 'pending';
-        call.duration_seconds = 0;
-        call.recording_url = '';
-        call.transcript = '';
-        call.sentiment = undefined;
-        
-        setLocalStorageData('h360_calls', calls);
-        setLocalStorageData('h360_campaigns', campaigns);
-        notifySubscribers('UPDATE', 'calls', call);
+      } catch (e) {
+        console.warn('[Supabase] Trigger single call update error:', e);
       }
     }
 
-    // Trigger via our direct Retell API (no n8n)
+    // Fire Retell outbound call
     if (callRecord) {
       fetch('/api/start-campaign', {
         method: 'POST',
@@ -787,36 +739,37 @@ export const db = {
   },
 
   async triggerNewSingleCallForPatient(patient: Omit<Call, 'id' | 'status' | 'created_at'>): Promise<Call> {
-    let newCall: Call;
+    const newCall: Call = {
+      id: `call_${Date.now()}`,
+      patient_name: patient.patient_name,
+      contact: patient.contact,
+      age: patient.age,
+      patient_type: patient.patient_type,
+      context: patient.context,
+      language: patient.language || LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)],
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    
+    const calls = getLocalStorageData<Call[]>('h360_calls', []);
+    calls.unshift(newCall);
+    setLocalStorageData('h360_calls', calls);
+    notifySubscribers('INSERT', 'calls', newCall);
 
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('calls')
-        .insert([{ ...patient, status: 'pending' }])
-        .select()
-        .single();
-      if (error) throw error;
-      newCall = data;
-    } else {
-      newCall = {
-        id: `call_${Date.now()}`,
-        patient_name: patient.patient_name,
-        contact: patient.contact,
-        age: patient.age,
-        patient_type: patient.patient_type,
-        context: patient.context,
-        language: patient.language || LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)],
-        status: 'pending',
-        created_at: new Date().toISOString()
-      };
-      
-      const calls = getLocalStorageData<Call[]>('h360_calls', []);
-      calls.push(newCall);
-      setLocalStorageData('h360_calls', calls);
-      notifySubscribers('INSERT', 'calls', newCall);
+      try {
+        const { data } = await supabase
+          .from('calls')
+          .insert([{ ...patient, status: 'pending' }])
+          .select()
+          .single();
+        if (data) Object.assign(newCall, data);
+      } catch (e) {
+        console.warn('[Supabase] Trigger new call insert error:', e);
+      }
     }
 
-    // Trigger via our direct Retell API (no n8n)
+    // Trigger Retell outbound call
     fetch('/api/start-campaign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

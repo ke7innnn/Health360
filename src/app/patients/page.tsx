@@ -15,7 +15,7 @@ import {
   Loader2,
   X
 } from 'lucide-react';
-import { db, isSupabaseConfigured, subscribeToRealtime, Call } from '@/lib/supabase';
+import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Call } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -65,15 +65,15 @@ export default function PatientsPage() {
 
     // Subscribe to realtime changes
     let unsubscribe: () => void;
-    if (isSupabaseConfigured && db) {
-      const channel = (db as any).supabase?.channel('patients-list-updates')
-        .on('postgres_changes', { event: '*', table: 'calls' }, () => {
+    if (isSupabaseConfigured && supabase) {
+      const channel = supabase.channel('patients-list-updates')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, () => {
           fetchCalls();
         })
         .subscribe();
       
       unsubscribe = () => {
-        channel?.unsubscribe();
+        channel.unsubscribe();
       };
     } else {
       unsubscribe = subscribeToRealtime((payload) => {

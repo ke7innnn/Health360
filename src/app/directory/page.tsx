@@ -8,7 +8,7 @@ import {
   Loader2,
   Users
 } from 'lucide-react';
-import { db, Patient } from '@/lib/supabase';
+import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Patient } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -44,6 +44,29 @@ export default function PatientDirectoryPage() {
 
   useEffect(() => {
     fetchPatients();
+
+    let unsubscribe: () => void;
+    if (isSupabaseConfigured && supabase) {
+      const channel = supabase.channel('directory-updates')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, () => {
+          fetchPatients();
+        })
+        .subscribe();
+      
+      unsubscribe = () => {
+        channel.unsubscribe();
+      };
+    } else {
+      unsubscribe = subscribeToRealtime((payload) => {
+        if (payload.table === 'patients' || payload.table === 'all') {
+          fetchPatients();
+        }
+      });
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const handleAddPatient = async () => {
