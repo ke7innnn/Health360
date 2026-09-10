@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { updateCallFromWebhook } from '@/lib/campaign_manager';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -131,8 +132,15 @@ export async function POST(request: Request) {
     console.log(`[Retell Webhook] event="${event}" call_id="${retellCallId}" metadata=${JSON.stringify(metadata)}`);
     console.log(`[Retell Webhook] Full payload keys: ${Object.keys(body).join(', ')}`);
 
+    // Always sync with CampaignManager to advance queue and update live states
+    try {
+      await updateCallFromWebhook(event, callData);
+    } catch (cmErr) {
+      console.error('[Retell Webhook] CampaignManager sync error:', cmErr);
+    }
+
     if (!supabase) {
-      return NextResponse.json({ message: 'Supabase not configured.' }, { status: 200 });
+      return NextResponse.json({ message: 'Processed via CampaignManager.' }, { status: 200 });
     }
 
     // ── call_started: mark in_progress ───────────────────────────────────────

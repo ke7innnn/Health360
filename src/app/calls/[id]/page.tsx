@@ -37,7 +37,7 @@ export default function CallDetailPage() {
     }
   }, [id]);
 
-  const fetchCall = async () => {
+  const fetchCall = React.useCallback(async () => {
     try {
       const data = await db.getCall(id);
       setCall(data);
@@ -47,7 +47,7 @@ export default function CallDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchCall();
@@ -75,7 +75,7 @@ export default function CallDetailPage() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [id]);
+  }, [id, fetchCall]);
 
   const handleCallAgain = async () => {
     if (!call) return;

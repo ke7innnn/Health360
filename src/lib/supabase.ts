@@ -466,6 +466,23 @@ export const db = {
   },
 
   async getCampaign(id: string): Promise<Campaign | null> {
+    try {
+      const res = await fetch(`/api/campaigns/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.campaign) {
+          const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+          const idx = campaigns.findIndex(c => c.id === id);
+          if (idx >= 0) campaigns[idx] = data.campaign;
+          else campaigns.unshift(data.campaign);
+          setLocalStorageData('h360_campaigns', campaigns);
+          return data.campaign;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
     return safeQuery(
       async () => {
         const { data, error } = await supabase!.from('campaigns').select('*').eq('id', id).single();
@@ -496,30 +513,34 @@ export const db = {
   },
 
   async createCampaign(name: string, patients: Omit<Call, 'id' | 'status' | 'created_at'>[]): Promise<Campaign> {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const res = await fetch('/api/start-campaign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, patients }),
-        });
+    try {
+      const res = await fetch('/api/start-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, patients }),
+      });
 
-        if (res.ok) {
-          const result = await res.json();
-          const { data: campData } = await supabase
-            .from('campaigns')
-            .select('*')
-            .eq('id', result.campaign_id)
-            .single();
+      if (res.ok) {
+        const result = await res.json();
+        if (result.campaign) {
+          const campaigns = getLocalStorageData<Campaign[]>('h360_campaigns', []);
+          campaigns.unshift(result.campaign);
+          setLocalStorageData('h360_campaigns', campaigns);
 
-          if (campData) return campData;
+          if (result.calls) {
+            const calls = getLocalStorageData<Call[]>('h360_calls', []);
+            setLocalStorageData('h360_calls', [...result.calls, ...calls]);
+          }
+
+          notifySubscribers('INSERT', 'campaigns', result.campaign);
+          return result.campaign;
         }
-      } catch (e) {
-        console.warn('[StartCampaign API] Cloud start error, fallback to local:', e);
       }
+    } catch (e) {
+      console.warn('[StartCampaign API] Cloud start error, fallback to local:', e);
     }
 
-    // Local fallback creation
+    // Local fallback creation if network fails completely
     const campaignId = `camp_${Date.now()}`;
     const total = patients.length;
 
@@ -529,7 +550,7 @@ export const db = {
       total_patients: total,
       completed: 0,
       failed: 0,
-      in_progress: 0,
+      in_progress: total > 0 ? 1 : 0,
       created_at: new Date().toISOString()
     };
 
@@ -546,7 +567,8 @@ export const db = {
       patient_type: p.patient_type,
       context: p.context,
       language: p.language || LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)],
-      status: 'pending',
+      status: idx === 0 ? 'in_progress' : 'pending',
+      live_state: idx === 0 ? 'ringing' : 'queued',
       created_at: new Date().toISOString()
     }));
 
@@ -666,6 +688,21 @@ export const db = {
   },
 
   async getCampaignCalls(campaignId: string): Promise<Call[]> {
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.calls && data.calls.length > 0) {
+          const allCalls = getLocalStorageData<Call[]>('h360_calls', []);
+          const otherCalls = allCalls.filter(c => c.campaign_id !== campaignId);
+          setLocalStorageData('h360_calls', [...data.calls, ...otherCalls]);
+          return data.calls;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
     return safeQuery(
       async () => {
         const { data, error } = await supabase!.from('calls').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true });

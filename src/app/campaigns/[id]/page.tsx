@@ -1,23 +1,26 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, 
   PhoneCall, 
+  PhoneForwarded,
   CheckCircle2, 
   XCircle, 
   Clock, 
   RotateCcw,
   Sparkles,
   Loader2,
-  Trash2
+  Trash2,
+  Radio
 } from 'lucide-react';
-import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Call, Campaign } from '@/lib/supabase';
+import { db, Call, Campaign } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 export default function CampaignTrackingPage() {
@@ -28,98 +31,94 @@ export default function CampaignTrackingPage() {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [retryingFailed, setRetryingFailed] = useState(false);
+  const [advancingQueue, setAdvancingQueue] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handleDeleteCampaign = async () => {
-    if (!campaign) return;
-    if (!window.confirm(`Are you sure you want to delete the campaign "${campaign.name}" and all associated patient calls? This action cannot be undone.`)) {
-      return;
-    }
+  // Keep track of active live timer
+  const [liveSeconds, setLiveSeconds] = useState(0);
+  const activeCallRef = useRef<Call | null>(null);
 
+  // ─── Fetch Campaign & Calls from Live Server Endpoint ───────────────────────
+  const fetchCampaignAndCalls = useCallback(async () => {
     try {
-      setDeleting(true);
-      await db.deleteCampaign(id);
-      toast.success(`Campaign "${campaign.name}" deleted successfully.`);
-      router.push('/campaigns');
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to delete campaign.');
-      setDeleting(false);
-    }
-  };
+      const res = await fetch(`/api/campaigns/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.campaign) {
+          setCampaign(data.campaign);
+          setCalls(data.calls || []);
 
-  const fetchCampaignAndCalls = async () => {
-    try {
+          // Track active call for live timer
+          const active = (data.calls || []).find((c: Call) => c.status === 'in_progress');
+          activeCallRef.current = active || null;
+          if (active && active.duration_seconds !== undefined) {
+            setLiveSeconds(active.duration_seconds);
+          }
+          return;
+        }
+      }
+      // Fallback to local DB if API not reachable
       const camp = await db.getCampaign(id);
       const campCalls = await db.getCampaignCalls(id);
       setCampaign(camp);
       setCalls(campCalls);
     } catch (err) {
-      console.error(err);
-      toast.error('Failed to load campaign data.');
+      console.error('[CampaignTracking] Error fetching:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
+  // ─── Real-time Fast Polling (1.5 seconds) ───────────────────────────────────
   useEffect(() => {
     fetchCampaignAndCalls();
 
-    let unsubscribe: (() => void) | undefined;
-
-    if (isSupabaseConfigured && supabase) {
-      // Use the actual supabase client for realtime — NOT (db as any).supabase which is undefined
-      const channel = supabase
-        .channel(`campaign-track-${id}`)
-        .on(
-          'postgres_changes' as any,
-          { event: '*', schema: 'public', table: 'calls', filter: `campaign_id=eq.${id}` },
-          () => { fetchCampaignAndCalls(); }
-        )
-        .on(
-          'postgres_changes' as any,
-          { event: '*', schema: 'public', table: 'campaigns', filter: `id=eq.${id}` },
-          () => { fetchCampaignAndCalls(); }
-        )
-        .subscribe((status: string) => {
-          if (status === 'SUBSCRIBED') {
-            console.log(`[Realtime] Subscribed to campaign-track-${id}`);
-          }
-        });
-
-      unsubscribe = () => { channel.unsubscribe(); };
-    } else {
-      // Mock/local storage realtime
-      unsubscribe = subscribeToRealtime((payload) => {
-        if (
-          payload.table === 'all' ||
-          (payload.table === 'calls' && payload.record?.campaign_id === id) ||
-          (payload.table === 'campaigns' && payload.record?.id === id)
-        ) {
-          fetchCampaignAndCalls();
-        }
-      });
-    }
-
-    // Polling fallback: refresh every 8 seconds in case realtime misses an event
     const pollInterval = setInterval(() => {
       fetchCampaignAndCalls();
-    }, 8000);
+    }, 1500);
 
     return () => {
-      if (unsubscribe) unsubscribe();
       clearInterval(pollInterval);
     };
-  }, [id]);
+  }, [fetchCampaignAndCalls]);
 
-  // Bulk Retry Failed Calls
+  // ─── Live Second Tick for In-Progress Speaking Call ─────────────────────────
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (activeCallRef.current && (activeCallRef.current as any).live_state === 'speaking') {
+        setLiveSeconds(prev => prev + 1);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // ─── Advance to Next Patient in Queue ───────────────────────────────────────
+  const handleTriggerNext = async () => {
+    try {
+      setAdvancingQueue(true);
+      const res = await fetch(`/api/campaigns/${id}/next`, { method: 'POST' });
+      const data = await res.json();
+      if (data.next_call) {
+        toast.success(`Dialing next patient: ${data.next_call.patient_name}`);
+        fetchCampaignAndCalls();
+      } else if (data.queue_finished) {
+        toast.info('All patients in this campaign have been dialed!');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to trigger next call.');
+    } finally {
+      setAdvancingQueue(false);
+    }
+  };
+
+  // ─── Bulk Retry Failed Calls ────────────────────────────────────────────────
   const handleRetryFailed = async () => {
     try {
       setRetryingFailed(true);
       await db.retryFailedCampaignCalls(id);
-      toast.success('Retrying all failed calls in this campaign!', {
-        description: 'Failed calls have been put back into queue.'
-      });
+      toast.success('Retrying failed calls!', { description: 'Re-dialing pending queue...' });
+      fetchCampaignAndCalls();
     } catch (err) {
       console.error(err);
       toast.error('Failed to retry calls.');
@@ -128,11 +127,29 @@ export default function CampaignTrackingPage() {
     }
   };
 
-  // Single patient Call Now/Call Again trigger
+  // ─── Delete Campaign ────────────────────────────────────────────────────────
+  const handleDeleteCampaign = async () => {
+    if (!campaign) return;
+    if (!window.confirm(`Delete campaign "${campaign.name}" and all records?`)) return;
+
+    try {
+      setDeleting(true);
+      await db.deleteCampaign(id);
+      toast.success(`Campaign "${campaign.name}" deleted.`);
+      router.push('/campaigns');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete campaign.');
+      setDeleting(false);
+    }
+  };
+
+  // ─── Single Call Now / Call Again ───────────────────────────────────────────
   const handleSingleCall = async (callId: string, name: string) => {
     try {
       await db.triggerSingleCall(callId);
-      toast.info(`Single call triggered for ${name}`);
+      toast.info(`Triggered call for ${name}`);
+      fetchCampaignAndCalls();
     } catch (err) {
       console.error(err);
       toast.error('Failed to start call.');
@@ -141,10 +158,11 @@ export default function CampaignTrackingPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 animate-pulse">
-        <div className="h-6 w-20 bg-slate-200 rounded-xl" />
+      <div className="flex flex-col gap-6 animate-pulse p-4">
+        <div className="h-10 bg-slate-200 rounded-xl w-44" />
         <div className="h-44 bg-white rounded-3xl border border-slate-200" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="h-28 bg-white rounded-2xl border border-slate-200" />
           <div className="h-28 bg-white rounded-2xl border border-slate-200" />
           <div className="h-28 bg-white rounded-2xl border border-slate-200" />
           <div className="h-28 bg-white rounded-2xl border border-slate-200" />
@@ -157,7 +175,7 @@ export default function CampaignTrackingPage() {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center h-[50vh]">
         <h3 className="font-bold text-slate-700 text-lg">Campaign not found</h3>
-        <p className="text-xs text-slate-400 mt-1 mb-6">The campaign id you are trying to track doesn't exist.</p>
+        <p className="text-xs text-slate-400 mt-1 mb-6">The campaign you are looking for doesn't exist.</p>
         <Button onClick={() => router.push('/campaigns')} className="bg-sage-500 hover:bg-sage-600 text-white rounded-xl">
           View All Campaigns
         </Button>
@@ -165,17 +183,32 @@ export default function CampaignTrackingPage() {
     );
   }
 
-  // Progress Calculations
-  const total = campaign.total_patients || 0;
-  const completed = campaign.completed || 0;
-  const failed = campaign.failed || 0;
-  const inProgress = campaign.in_progress || 0;
+  // Active in-progress call
+  const activeCall = calls.find(c => c.status === 'in_progress');
+  const activeLiveState = (activeCall as any)?.live_state || (activeCall ? 'speaking' : 'idle');
+
+  // Next up call
+  const pendingCalls = calls.filter(c => c.status === 'pending');
+  const nextUpCall = pendingCalls[0];
+
+  // Counts
+  const total = calls.length || campaign.total_patients || 0;
+  const completed = calls.filter(c => c.status === 'completed').length;
+  const failed = calls.filter(c => c.status === 'failed').length;
+  const inProgress = activeCall ? 1 : 0;
   const processed = completed + failed;
   const progressPercent = total > 0 ? Math.round((processed / total) * 100) : 0;
 
+  // Format seconds to MM:SS
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header breadcrumb */}
+    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      {/* Header breadcrumb & actions */}
       <div className="flex items-center justify-between">
         <Button 
           variant="ghost" 
@@ -183,39 +216,150 @@ export default function CampaignTrackingPage() {
           className="text-slate-500 hover:text-slate-800 rounded-xl"
           onClick={() => router.push('/campaigns')}
         >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Campaigns
+          <ArrowLeft className="h-4 w-4 mr-1" /> All Campaigns
         </Button>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {pendingCalls.length > 0 && !activeCall && (
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-1.5 shadow-sm"
+              disabled={advancingQueue}
+              onClick={handleTriggerNext}
+            >
+              <PhoneForwarded className="h-3.5 w-3.5" />
+              {advancingQueue ? 'Dialing Next...' : 'Dial Next Patient'}
+            </Button>
+          )}
+
           {failed > 0 && (
             <Button
               size="sm"
               variant="outline"
-              className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors gap-2"
+              className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 gap-1.5"
               disabled={retryingFailed}
               onClick={handleRetryFailed}
             >
-              <RotateCcw className="h-4 w-4" />
-              {retryingFailed ? 'Retrying...' : 'Retry Failed Calls'}
+              <RotateCcw className="h-3.5 w-3.5" />
+              {retryingFailed ? 'Retrying...' : `Retry Failed (${failed})`}
             </Button>
           )}
 
           <Button
             size="sm"
-            variant="outline"
-            className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors gap-2"
+            variant="ghost"
+            className="rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
             disabled={deleting}
             onClick={handleDeleteCampaign}
           >
-            {deleting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-            {deleting ? 'Deleting...' : 'Delete Campaign'}
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           </Button>
         </div>
       </div>
+
+      {/* ── REAL-TIME HERO LIVE CALL BANNER ─────────────────────────────────── */}
+      <AnimatePresence mode="wait">
+        {activeCall ? (
+          <motion.div
+            key={activeCall.id + activeLiveState}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+          >
+            <div className={`rounded-3xl p-6 border shadow-md relative overflow-hidden transition-all ${
+              activeLiveState === 'speaking'
+                ? 'bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 text-white border-emerald-500/30'
+                : 'bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 text-white border-amber-500/30'
+            }`}>
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+                <div className="flex items-center gap-4">
+                  {/* Glowing Animated Icon */}
+                  <div className={`p-4 rounded-2xl flex items-center justify-center ${
+                    activeLiveState === 'speaking'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse'
+                      : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  }`}>
+                    {activeLiveState === 'speaking' ? (
+                      <Radio className="h-8 w-8 animate-bounce" />
+                    ) : (
+                      <PhoneCall className="h-8 w-8 animate-pulse" />
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Badge className={activeLiveState === 'speaking'
+                        ? 'bg-emerald-500 text-slate-950 font-extrabold uppercase text-[10px] tracking-widest'
+                        : 'bg-amber-500 text-slate-950 font-extrabold uppercase text-[10px] tracking-widest'
+                      }>
+                        {activeLiveState === 'speaking' ? '🗣️ CALL CONNECTED · SPEAKING' : '🔔 RINGING PATIENT NOW...'}
+                      </Badge>
+
+                      <span className="text-xs text-slate-400 font-mono">
+                        Line: {activeCall.contact}
+                      </span>
+                    </div>
+
+                    <h2 className="text-xl md:text-2xl font-extrabold tracking-tight text-white mt-1">
+                      {activeCall.patient_name}
+                      <span className="text-sm font-normal text-slate-300 ml-2">
+                        ({activeCall.patient_type || 'General Patient'})
+                      </span>
+                    </h2>
+
+                    <p className="text-xs text-slate-300 mt-0.5 line-clamp-1">
+                      Context: {activeCall.context || 'General physiotherapy checkup & consultation follow-up'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right side: Live Timer & Queue Status */}
+                <div className="flex items-center gap-6 self-end md:self-center">
+                  <div className="text-right">
+                    <div className="text-2xl md:text-3xl font-mono font-bold text-white tracking-wider">
+                      {formatTime(liveSeconds)}
+                    </div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      {activeLiveState === 'speaking' ? 'Call Duration' : 'Dialing Time'}
+                    </p>
+                  </div>
+
+                  {nextUpCall && (
+                    <div className="hidden lg:block border-l border-white/10 pl-6 text-left">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Up Next in Queue:
+                      </span>
+                      <span className="text-xs font-semibold text-slate-200">
+                        {nextUpCall.patient_name}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 block">
+                        {nextUpCall.contact}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : pendingCalls.length === 0 && processed > 0 ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="rounded-3xl p-6 bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-emerald-500 text-white rounded-2xl">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base">Campaign Finished Successfully!</h3>
+                <p className="text-xs text-emerald-700">All {total} patients in the roster have been processed.</p>
+              </div>
+            </div>
+            <Badge className="bg-emerald-600 text-white px-3 py-1">100% Completed</Badge>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* Campaign Status Master Card */}
       <Card className="rounded-3xl border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -223,14 +367,20 @@ export default function CampaignTrackingPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-sage-600 uppercase tracking-widest bg-sage-50 px-2 py-0.5 rounded-full border border-sage-100">Live Campaign</span>
-                <span className="text-xs text-slate-400 font-medium">Launched {new Date(campaign.created_at).toLocaleDateString()}</span>
+                <span className="text-[10px] font-bold text-sage-600 uppercase tracking-widest bg-sage-50 px-2.5 py-0.5 rounded-full border border-sage-200">
+                  {inProgress > 0 ? 'Live In-Progress' : pendingCalls.length > 0 ? 'Ready / In Queue' : 'Completed'}
+                </span>
+                <span className="text-xs text-slate-400 font-medium">
+                  Created {new Date(campaign.created_at).toLocaleDateString()}
+                </span>
               </div>
-              <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight mt-1">{campaign.name}</h1>
+              <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight mt-1">
+                {campaign.name}
+              </h1>
             </div>
             
             <div className="text-left md:text-right">
-              <span className="text-3xl font-extrabold text-sage-500 tracking-tight">{progressPercent}%</span>
+              <span className="text-3xl font-extrabold text-sage-600 tracking-tight">{progressPercent}%</span>
               <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Progress Rate</p>
             </div>
           </div>
@@ -239,8 +389,8 @@ export default function CampaignTrackingPage() {
             <div className="flex justify-between text-xs text-slate-500 font-semibold">
               <span>Patients Called: {processed} / {total}</span>
               {inProgress > 0 && (
-                <span className="text-blue-500 animate-pulse flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin" /> {inProgress} active lines dialing
+                <span className="text-blue-600 animate-pulse flex items-center gap-1 font-bold">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Calling 1 line at a time
                 </span>
               )}
             </div>
@@ -264,7 +414,7 @@ export default function CampaignTrackingPage() {
         <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Failed</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Failed / Busy</span>
               <h4 className="text-xl font-bold text-rose-600 leading-none mt-1">{failed}</h4>
             </div>
             <div className="p-2 bg-rose-50 text-rose-600 rounded-lg"><XCircle className="h-4 w-4" /></div>
@@ -274,7 +424,7 @@ export default function CampaignTrackingPage() {
         <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">In Progress</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Calling Now</span>
               <h4 className="text-xl font-bold text-blue-600 leading-none mt-1">{inProgress}</h4>
             </div>
             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><PhoneCall className="h-4 w-4 animate-bounce" /></div>
@@ -285,8 +435,8 @@ export default function CampaignTrackingPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase">Pending Queue</span>
-              <h4 className="text-xl font-bold text-slate-600 leading-none mt-1">
-                {total - processed - inProgress}
+              <h4 className="text-xl font-bold text-slate-700 leading-none mt-1">
+                {pendingCalls.length}
               </h4>
             </div>
             <div className="p-2 bg-slate-50 text-slate-500 rounded-lg"><Clock className="h-4 w-4" /></div>
@@ -296,75 +446,110 @@ export default function CampaignTrackingPage() {
 
       {/* Patient Live Cards Container */}
       <div>
-        <h2 className="text-md font-bold text-slate-800 mb-4 flex items-center gap-1.5">
-          Patient Call Roster
-          <Sparkles className="h-4 w-4 text-sage-500" />
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-bold text-slate-800 flex items-center gap-1.5">
+            <Sparkles className="h-4 w-4 text-sage-500" />
+            Patient Calling Queue ({calls.length})
+          </h2>
+          <span className="text-xs text-slate-400">Updates live every 1.5s</span>
+        </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <AnimatePresence mode="popLayout">
-            {calls.map((call) => {
-              // Custom design for each status state
+            {calls.map((call, idx) => {
+              const liveState = (call as any).live_state;
+              const isFirstPending = call.status === 'pending' && pendingCalls[0]?.id === call.id;
+
               let statusBorder = 'border-slate-200';
-              let statusIcon = <Clock className="h-5 w-5 text-slate-400" />;
-              let statusBg = 'bg-white';
+              let statusBadge = (
+                <span className="text-[10px] font-bold text-slate-400 uppercase">QUEUED #{idx + 1}</span>
+              );
+              const statusBg = 'bg-white';
               
               if (call.status === 'in_progress') {
-                statusBorder = 'border-blue-500 ring-2 ring-blue-500/10';
-                statusIcon = <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
-                statusBg = 'bg-blue-50/5';
+                if (liveState === 'speaking') {
+                  statusBorder = 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20';
+                  statusBadge = (
+                    <span className="text-[10px] font-extrabold text-emerald-600 animate-pulse flex items-center gap-1">
+                      🗣️ SPEAKING ({call.duration_seconds || liveSeconds}s)
+                    </span>
+                  );
+                } else {
+                  statusBorder = 'border-amber-400 ring-2 ring-amber-400/20 bg-amber-50/20';
+                  statusBadge = (
+                    <span className="text-[10px] font-extrabold text-amber-600 animate-pulse flex items-center gap-1">
+                      🔔 RINGING PHONE...
+                    </span>
+                  );
+                }
               } else if (call.status === 'completed') {
-                statusBorder = 'border-emerald-200';
-                statusIcon = <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
+                statusBorder = 'border-emerald-200 bg-emerald-50/5';
+                statusBadge = (
+                  <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                    COMPLETED ({call.duration_seconds || 0}s)
+                  </span>
+                );
               } else if (call.status === 'failed') {
-                statusBorder = 'border-rose-200';
-                statusIcon = <XCircle className="h-5 w-5 text-rose-500" />;
+                statusBorder = 'border-rose-200 bg-rose-50/10';
+                statusBadge = (
+                  <span className="text-[10px] font-bold text-rose-600 flex items-center gap-1">
+                    <XCircle className="h-3 w-3 text-rose-500" />
+                    NO ANSWER / FAILED
+                  </span>
+                );
+              } else if (isFirstPending) {
+                statusBorder = 'border-blue-300 bg-blue-50/10';
+                statusBadge = (
+                  <span className="text-[10px] font-bold text-blue-600 flex items-center gap-1">
+                    <PhoneForwarded className="h-3 w-3 text-blue-500" />
+                    NEXT UP TO CALL
+                  </span>
+                );
               }
 
               return (
                 <motion.div
                   key={call.id}
                   layoutId={call.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
+                  initial={{ opacity: 0, scale: 0.98 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className={`border rounded-2xl p-5 shadow-sm transition-all relative cursor-pointer ${statusBorder} ${statusBg} hover:shadow-md flex flex-col justify-between h-40`}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  className={`border rounded-2xl p-5 shadow-sm transition-all relative cursor-pointer ${statusBorder} ${statusBg} hover:shadow-md flex flex-col justify-between min-h-[160px]`}
                   onClick={() => router.push(`/calls/${call.id}`)}
                 >
                   <div className="flex justify-between items-start gap-2">
                     <div className="overflow-hidden">
-                      <h4 className="font-bold text-sm text-slate-800 truncate">{call.patient_name}</h4>
-                      <p className="text-[10px] text-slate-400 font-semibold">{call.patient_type}</p>
-                      <p className="text-xs text-slate-500 font-mono mt-1">{call.contact}</p>
-                    </div>
-                    <div>
-                      {statusIcon}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono font-bold text-slate-400">#{idx + 1}</span>
+                        <h4 className="font-bold text-sm text-slate-900 truncate">{call.patient_name}</h4>
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium mt-0.5">{call.patient_type}</p>
+                      <p className="text-xs text-slate-600 font-mono mt-1 font-semibold">{call.contact}</p>
+                      {call.context && (
+                        <p className="text-[11px] text-slate-400 mt-1 line-clamp-1 italic">
+                          "{call.context}"
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  <div className="border-t border-slate-100 pt-3 flex items-center justify-between mt-auto">
+                  <div className="border-t border-slate-100 pt-3 flex items-center justify-between mt-3">
                     <div>
-                      {call.status === 'completed' && (
-                        <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold">
-                          <Clock className="h-3 w-3 text-slate-400" />
-                          <span>{call.duration_seconds}s</span>
-                        </div>
-                      )}
-                      {call.status === 'in_progress' && (
-                        <span className="text-[10px] font-bold text-blue-500 animate-pulse">CALLING...</span>
-                      )}
-                      {call.status === 'pending' && (
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">QUEUED</span>
-                      )}
-                      {call.status === 'failed' && (
-                        <span className="text-[10px] font-bold text-rose-500 uppercase">NO ANSWER</span>
-                      )}
+                      {statusBadge}
                     </div>
 
                     <div onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="sm"
-                        className="btn-glow-green rounded-xl h-8 px-3 font-bold text-xs"
+                        variant={call.status === 'completed' ? 'outline' : 'default'}
+                        className={`rounded-xl h-7 px-3 text-xs font-bold ${
+                          call.status === 'in_progress' 
+                            ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                            : call.status === 'completed'
+                            ? 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                            : 'bg-sage-600 text-white hover:bg-sage-700'
+                        }`}
                         disabled={call.status === 'in_progress'}
                         onClick={() => handleSingleCall(call.id, call.patient_name)}
                       >
