@@ -621,6 +621,13 @@ export const db = {
         console.warn('[Supabase] Retry campaign error:', e);
       }
     }
+
+    // Trigger auto-dialing of the retried queue via backend campaign manager
+    try {
+      await fetch(`/api/campaigns/${campaignId}/retry`, { method: 'POST' });
+    } catch (apiErr) {
+      console.warn('[Supabase] Failed to call /api/campaigns/[id]/retry:', apiErr);
+    }
   },
 
   async retryAllFailedCalls(): Promise<void> {
@@ -659,6 +666,13 @@ export const db = {
       } catch (e) {
         console.warn('[Supabase] Retry all error:', e);
       }
+    }
+
+    // Trigger auto-dialing of all retried campaigns via backend campaign manager
+    try {
+      await fetch('/api/campaigns/retry-all', { method: 'POST' });
+    } catch (apiErr) {
+      console.warn('[Supabase] Failed to call /api/campaigns/retry-all:', apiErr);
     }
   },
 

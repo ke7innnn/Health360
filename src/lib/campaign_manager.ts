@@ -306,6 +306,93 @@ export async function triggerNextCampaignCall(campaignId: string): Promise<Call 
   }
 }
 
+
+// ── Bulk Retry Failed Calls in Campaign ──────────────────────────────────────
+export async function retryFailedCampaignCalls(campaignId: string): Promise<{ count: number; nextCall: Call | null }> {
+  const store = loadStore();
+  const campaign = store.campaigns[campaignId];
+  const calls = store.calls[campaignId] || [];
+
+  if (!campaign) return { count: 0, nextCall: null };
+
+  const failedCalls = calls.filter(c => c.status === "failed");
+  const count = failedCalls.length;
+
+  if (count > 0) {
+    failedCalls.forEach(c => {
+      c.status = "pending";
+      c.live_state = "queued";
+      c.updated_at = new Date().toISOString();
+    });
+    campaign.failed = Math.max(0, (campaign.failed || 0) - count);
+    saveStore(store);
+  }
+
+  if (supabase) {
+    try {
+      await supabase
+        .from("calls")
+        .update({ status: "pending" })
+        .eq("campaign_id", campaignId)
+        .eq("status", "failed");
+
+      const { data: camp } = await supabase.from("campaigns").select("*").eq("id", campaignId).single();
+      if (camp) {
+        await supabase.from("campaigns").update({
+          failed: Math.max(0, (camp.failed || 0) - count)
+        }).eq("id", campaignId);
+      }
+    } catch (e) {
+      console.warn("[CampaignManager] Supabase retry update error:", e);
+    }
+  }
+
+  // Auto-dial the first retried call to resume the campaign
+  const nextCall = await triggerNextCampaignCall(campaignId);
+  return { count, nextCall };
+}
+
+// ── Bulk Retry All Failed Calls Across All Campaigns ────────────────────────
+export async function retryAllFailedCalls(): Promise<{ totalCount: number }> {
+  const store = loadStore();
+  let totalCount = 0;
+
+  for (const campaignId of Object.keys(store.campaigns)) {
+    const campaign = store.campaigns[campaignId];
+    const calls = store.calls[campaignId] || [];
+    const failedCalls = calls.filter(c => c.status === "failed");
+    if (failedCalls.length > 0) {
+      failedCalls.forEach(c => {
+        c.status = "pending";
+        c.live_state = "queued";
+        c.updated_at = new Date().toISOString();
+      });
+      campaign.failed = Math.max(0, (campaign.failed || 0) - failedCalls.length);
+      totalCount += failedCalls.length;
+
+      // Start dialing the first retried call for this campaign if none in progress
+      const hasInProgress = calls.some(c => c.status === "in_progress");
+      if (!hasInProgress) {
+        triggerNextCampaignCall(campaignId).catch(err => {
+          console.error(`[CampaignManager] Error auto-dialing retry for campaign ${campaignId}:`, err);
+        });
+      }
+    }
+  }
+
+  saveStore(store);
+
+  if (supabase) {
+    try {
+      await supabase.from("calls").update({ status: "pending" }).eq("status", "failed");
+    } catch (e) {
+      console.warn("[CampaignManager] Supabase retry all update error:", e);
+    }
+  }
+
+  return { totalCount };
+}
+
 // ── Poll and Refresh Campaign Status with Live Retell Feedback ───────────────
 export async function getAndSyncCampaign(campaignId: string): Promise<{ campaign: Campaign | null; calls: Call[] }> {
   const store = loadStore();
