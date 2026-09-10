@@ -165,7 +165,7 @@ export default function DashboardPage() {
             Physiotherapy Calling Desk <Sparkles className="h-5 w-5 text-sage-500" />
           </h1>
           <p className="text-sm text-slate-500">
-            Realtime campaign summaries and patient outbound response metrics.
+            Realtime summaries across {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''} and patient outbound response metrics.
           </p>
         </div>
         <div className="flex gap-3">

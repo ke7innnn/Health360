@@ -104,7 +104,7 @@ const getLocalStorageData = <T>(key: string, defaultValue: T): T => {
   try {
     const stored = localStorage.getItem(key);
     return stored ? JSON.parse(stored) : defaultValue;
-  } catch (e) {
+  } catch {
     return defaultValue;
   }
 };
@@ -113,8 +113,8 @@ const setLocalStorageData = <T>(key: string, data: T): void => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
-    console.error('LocalStorage write error:', e);
+  } catch (err) {
+    console.error('LocalStorage write error:', err);
   }
 };
 
@@ -147,7 +147,7 @@ const seedMockData = () => {
     setLocalStorageData('h360_patients', INITIAL_PATIENTS as Patient[]);
   }
 
-  if (campaigns.length === 0) {
+  if (campaigns.length === 0 || calls.length === 0) {
     const initialCampaigns: Campaign[] = [
       {
         id: 'c1',

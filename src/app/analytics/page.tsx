@@ -90,7 +90,6 @@ export default function AnalyticsPage() {
   }
 
   // Calculate Metrics
-  const totalCallsCount = calls.length;
   const completedCalls = calls.filter(c => c.status === 'completed');
   const failedCallsCount = calls.filter(c => c.status === 'failed').length;
   const completedCallsCount = completedCalls.length;

@@ -6,8 +6,7 @@ import {
   Meh, 
   Frown, 
   Calendar, 
-  Clock, 
-  UserCheck 
+  Clock 
 } from 'lucide-react';
 import { Call } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';

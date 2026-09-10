@@ -206,10 +206,14 @@ export default function NewProjectPage() {
     
     try {
       setIsSaving(true);
-      const cleanPatients = patients.map(p => {
-        const { isValid, ...rest } = p;
-        return rest;
-      });
+      const cleanPatients = patients.map(p => ({
+        patient_name: p.patient_name,
+        contact: p.contact,
+        age: p.age,
+        patient_type: p.patient_type,
+        context: p.context,
+        language: p.language
+      }));
       await db.createProject(projectName, cleanPatients);
       toast.success('Patient list saved successfully!');
       setTimeout(() => router.push('/projects'), 1500);

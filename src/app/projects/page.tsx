@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Project } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 
 export default function ProjectsPage() {

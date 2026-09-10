@@ -227,10 +227,14 @@ export default function EditProjectPage({ params }: { params: Promise<{ id: stri
     
     try {
       setIsSaving(true);
-      const cleanPatients = patients.map(p => {
-        const { isValid, ...rest } = p;
-        return rest;
-      });
+      const cleanPatients = patients.map(p => ({
+        patient_name: p.patient_name,
+        contact: p.contact,
+        age: p.age,
+        patient_type: p.patient_type,
+        context: p.context,
+        language: p.language
+      }));
       Promise.resolve(params).then(async (unwrappedParams) => {
         await db.updateProject(unwrappedParams.id, projectName, cleanPatients);
         toast.success('Patient list updated successfully!');

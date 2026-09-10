@@ -6,10 +6,7 @@ import {
   Megaphone, 
   Calendar, 
   Users, 
-  CheckCircle2, 
-  XCircle, 
   Loader2, 
-  PhoneCall, 
   RotateCcw,
   Sparkles,
   Inbox,
@@ -17,7 +14,7 @@ import {
 } from 'lucide-react';
 import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Campaign } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';

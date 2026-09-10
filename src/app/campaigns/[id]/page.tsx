@@ -17,8 +17,7 @@ import {
 import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Call, Campaign } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 
 export default function CampaignTrackingPage() {

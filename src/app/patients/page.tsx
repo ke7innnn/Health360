@@ -4,20 +4,18 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Search, 
-  Filter, 
   Download, 
   Phone, 
   Calendar, 
-  Clock, 
   Plus, 
-  Sparkles,
-  Inbox,
-  Loader2,
-  X
+  Sparkles, 
+  Inbox, 
+  Loader2, 
+  X 
 } from 'lucide-react';
 import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Call } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -464,7 +462,12 @@ export default function PatientsPage() {
       {/* Directory Table Grid */}
       <Card className="rounded-3xl border-slate-200 bg-white shadow-sm overflow-hidden">
         <CardContent className="p-0">
-          {filteredCalls.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center h-[40vh] text-slate-400">
+              <Loader2 className="h-8 w-8 text-sage-500 animate-spin mb-3" />
+              <p className="text-xs font-medium text-slate-500">Loading call roster...</p>
+            </div>
+          ) : filteredCalls.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 text-center h-[40vh] text-slate-400">
               <Inbox className="h-10 w-10 text-slate-300 mb-3" />
               <h4 className="font-semibold text-slate-700">No matching patient records</h4>
