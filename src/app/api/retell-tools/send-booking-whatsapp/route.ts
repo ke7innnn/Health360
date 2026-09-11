@@ -15,8 +15,9 @@ export async function POST(req: Request) {
       }, { status: 200 }); // Always 200 so Retell gets a readable error result
     }
 
-    // 1. Extract phone number from Retell payload
+    // 1. Extract phone number and caller name from Retell payload
     const rawPhone = body.args?.patient_phone || body.call?.from_number || body.call?.user_number;
+    const callerName = body.args?.patient_name || body.call?.retell_llm_dynamic_variables?.patient_name || 'Patient';
 
     if (!rawPhone) {
       console.error('[Retell Tool: send-booking-whatsapp] No phone number provided in payload.');
@@ -27,47 +28,101 @@ export async function POST(req: Request) {
 
     // 2. Format phone number for Meta WhatsApp Cloud API (digits only, e.g. 919876543210)
     let cleanPhone = rawPhone.replace(/\D/g, '');
-    
-    // If it's a 10-digit Indian number, prepend 91
     if (cleanPhone.length === 10) {
       cleanPhone = `91${cleanPhone}`;
     }
 
-    const bookingLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://health360-nu.vercel.app'}/projects`;
-    const messageText = `Hello from Health 360 Physiotherapy Clinic! 🩺\n\nYou can book your appointment online using the link below:\n\n👉 ${bookingLink}\n\nWe look forward to seeing you!`;
+    const websiteUrl = 'https://www.thehealth360.in/';
+    const mapsUrl = 'https://maps.app.goo.gl/VpvTzGtZy3kCZZWGA';
 
-    // 3. Call Meta WhatsApp Cloud API
-    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: cleanPhone,
-        type: 'text',
-        text: {
-          preview_url: true,
-          body: messageText
+    const richMessage = `🌿 *Health 360 Physiotherapy & Craniosacral Clinic* 🌿\n\nHello ${callerName}! Thank you for calling Dr. Rashmita's Clinic.\n\n🌐 *Website & Online Booking:*\n👉 ${websiteUrl}\n\n📍 *Clinic Address:*\nHealth 360 Clinic, Shop no. 1 & 2, Amardeep Society, Om Nagar, Vasai West.\n\n🗺️ *Google Maps Location:*\n${mapsUrl}\n\n🕙 *Clinic Timings:*\n• Morning: 10:00 AM – 2:00 PM\n• Evening: 5:00 PM – 9:00 PM\n\n☎️ *Contact:* 8482812859 / 9834848981\n\nWe look forward to welcoming you! 🌸`;
+
+    let deliverySuccess = false;
+    let deliveryMethod = '';
+
+    // 3. Strategy A: Send rich text message (contains live website, address & Google map)
+    try {
+      const textRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: cleanPhone,
+          type: 'text',
+          text: {
+            preview_url: true,
+            body: richMessage
+          }
+        })
+      });
+
+      const textData = await textRes.json();
+      if (textRes.ok && textData.messages) {
+        deliverySuccess = true;
+        deliveryMethod = 'rich_text';
+        console.log('[Retell Tool: send-booking-whatsapp] Sent rich text via 24h window:', textData.messages[0].id);
+      } else {
+        console.warn('[Retell Tool: send-booking-whatsapp] Rich text failed (24h window closed), attempting template:', textData.error?.message);
+      }
+    } catch (e: any) {
+      console.warn('[Retell Tool: send-booking-whatsapp] Rich text error:', e.message);
+    }
+
+    // 4. Strategy B: If 24h window is closed, send verified Meta template 'welcome_clinic_info'
+    if (!deliverySuccess) {
+      try {
+        const tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'template',
+            template: {
+              name: 'welcome_clinic_info',
+              language: { code: 'en' },
+              components: [
+                {
+                  type: 'body',
+                  parameters: [
+                    { type: 'text', text: callerName }
+                  ]
+                }
+              ]
+            }
+          })
+        });
+
+        const tplData = await tplRes.json();
+        if (tplRes.ok && tplData.messages) {
+          deliverySuccess = true;
+          deliveryMethod = 'meta_template';
+          console.log('[Retell Tool: send-booking-whatsapp] Sent verified welcome_clinic_info template:', tplData.messages[0].id);
+        } else {
+          console.error('[Retell Tool: send-booking-whatsapp] Template delivery failed:', tplData.error);
         }
-      })
-    });
+      } catch (tplErr: any) {
+        console.error('[Retell Tool: send-booking-whatsapp] Template error:', tplErr.message);
+      }
+    }
 
-    const resData = await response.json();
-
-    if (!response.ok) {
-      console.error('[Retell Tool: send-booking-whatsapp] Meta API Error:', resData);
+    if (deliverySuccess) {
       return NextResponse.json({
-        result: `Failed to send WhatsApp message: ${resData.error?.message || 'API error'}`
+        result: `Successfully sent WhatsApp message with clinic details, website link (${websiteUrl}), and address to +${cleanPhone}.`,
+        method: deliveryMethod
       }, { status: 200 });
     }
 
-    console.log('[Retell Tool: send-booking-whatsapp] Successfully sent message to:', cleanPhone, resData);
-
     return NextResponse.json({
-      result: `Successfully sent the online booking link to WhatsApp number +${cleanPhone}.`
+      result: 'Failed to deliver WhatsApp message via Meta API.'
     }, { status: 200 });
 
   } catch (error: any) {
