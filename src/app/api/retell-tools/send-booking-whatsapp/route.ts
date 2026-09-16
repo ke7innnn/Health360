@@ -72,44 +72,29 @@ export async function POST(req: Request) {
       console.warn('[Retell Tool: send-booking-whatsapp] Rich text error:', e.message);
     }
 
-    // 4. Strategy B: If 24h window is closed, send verified Meta template 'welcome_clinic_info'
+    // 4. Strategy B: If 24h window is closed, send verified Meta template
     if (!deliverySuccess) {
+      const templateCandidates = ['health360_clinic_info', 'clinic_booking_details', 'welcome_clinic_info'];
       const languagesToTry = ['en', 'en_US'];
-      for (const langCode of languagesToTry) {
+
+      for (const tplName of templateCandidates) {
         if (deliverySuccess) break;
-        try {
-          // Send parameter-free template first (universal, works even if caller name is unknown)
-          let tplPayload: any = {
-            messaging_product: 'whatsapp',
-            recipient_type: 'individual',
-            to: cleanPhone,
-            type: 'template',
-            template: {
-              name: 'welcome_clinic_info',
-              language: { code: langCode }
-            }
-          };
-
-          let tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(tplPayload)
-          });
-
-          let tplData = await tplRes.json();
-
-          // If template requires parameters, retry with caller name
-          if (!tplRes.ok && tplData.error?.message?.toLowerCase().includes('parameter')) {
-            tplPayload.template.components = [
-              {
-                type: 'body',
-                parameters: [{ type: 'text', text: callerName || 'Patient' }]
+        for (const langCode of languagesToTry) {
+          if (deliverySuccess) break;
+          try {
+            // Send parameter-free template first (universal, works even if caller name is unknown)
+            let tplPayload: any = {
+              messaging_product: 'whatsapp',
+              recipient_type: 'individual',
+              to: cleanPhone,
+              type: 'template',
+              template: {
+                name: tplName,
+                language: { code: langCode }
               }
-            ];
-            tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+            };
+
+            let tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -117,18 +102,38 @@ export async function POST(req: Request) {
               },
               body: JSON.stringify(tplPayload)
             });
-            tplData = await tplRes.json();
-          }
 
-          if (tplRes.ok && tplData.messages) {
-            deliverySuccess = true;
-            deliveryMethod = `meta_template_${langCode}`;
-            console.log(`[Retell Tool: send-booking-whatsapp] Sent verified welcome_clinic_info template (${langCode}):`, tplData.messages[0].id);
-          } else {
-            console.warn(`[Retell Tool: send-booking-whatsapp] Template (${langCode}) delivery failed:`, tplData.error?.message);
+            let tplData = await tplRes.json();
+
+            // If template requires parameters, retry with caller name
+            if (!tplRes.ok && tplData.error?.message?.toLowerCase().includes('parameter')) {
+              tplPayload.template.components = [
+                {
+                  type: 'body',
+                  parameters: [{ type: 'text', text: callerName || 'Patient' }]
+                }
+              ];
+              tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(tplPayload)
+              });
+              tplData = await tplRes.json();
+            }
+
+            if (tplRes.ok && tplData.messages) {
+              deliverySuccess = true;
+              deliveryMethod = `meta_template_${tplName}_${langCode}`;
+              console.log(`[Retell Tool: send-booking-whatsapp] Sent verified template ${tplName} (${langCode}):`, tplData.messages[0].id);
+            } else {
+              // Try next
+            }
+          } catch (tplErr: any) {
+            console.error(`[Retell Tool: send-booking-whatsapp] Template (${tplName}/${langCode}) error:`, tplErr.message);
           }
-        } catch (tplErr: any) {
-          console.error(`[Retell Tool: send-booking-whatsapp] Template (${langCode}) error:`, tplErr.message);
         }
       }
     }
