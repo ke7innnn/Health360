@@ -74,43 +74,47 @@ export async function POST(req: Request) {
 
     // 4. Strategy B: If 24h window is closed, send verified Meta template 'welcome_clinic_info'
     if (!deliverySuccess) {
-      try {
-        const tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            recipient_type: 'individual',
-            to: cleanPhone,
-            type: 'template',
-            template: {
-              name: 'welcome_clinic_info',
-              language: { code: 'en' },
-              components: [
-                {
-                  type: 'body',
-                  parameters: [
-                    { type: 'text', text: callerName }
-                  ]
-                }
-              ]
-            }
-          })
-        });
+      const languagesToTry = ['en', 'en_US'];
+      for (const langCode of languagesToTry) {
+        if (deliverySuccess) break;
+        try {
+          const tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              recipient_type: 'individual',
+              to: cleanPhone,
+              type: 'template',
+              template: {
+                name: 'welcome_clinic_info',
+                language: { code: langCode },
+                components: [
+                  {
+                    type: 'body',
+                    parameters: [
+                      { type: 'text', text: callerName }
+                    ]
+                  }
+                ]
+              }
+            })
+          });
 
-        const tplData = await tplRes.json();
-        if (tplRes.ok && tplData.messages) {
-          deliverySuccess = true;
-          deliveryMethod = 'meta_template';
-          console.log('[Retell Tool: send-booking-whatsapp] Sent verified welcome_clinic_info template:', tplData.messages[0].id);
-        } else {
-          console.error('[Retell Tool: send-booking-whatsapp] Template delivery failed:', tplData.error);
+          const tplData = await tplRes.json();
+          if (tplRes.ok && tplData.messages) {
+            deliverySuccess = true;
+            deliveryMethod = `meta_template_${langCode}`;
+            console.log(`[Retell Tool: send-booking-whatsapp] Sent verified welcome_clinic_info template (${langCode}):`, tplData.messages[0].id);
+          } else {
+            console.warn(`[Retell Tool: send-booking-whatsapp] Template (${langCode}) delivery failed:`, tplData.error?.message);
+          }
+        } catch (tplErr: any) {
+          console.error(`[Retell Tool: send-booking-whatsapp] Template (${langCode}) error:`, tplErr.message);
         }
-      } catch (tplErr: any) {
-        console.error('[Retell Tool: send-booking-whatsapp] Template error:', tplErr.message);
       }
     }
 
