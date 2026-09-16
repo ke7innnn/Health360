@@ -78,33 +78,48 @@ export async function POST(req: Request) {
       for (const langCode of languagesToTry) {
         if (deliverySuccess) break;
         try {
-          const tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+          // Send parameter-free template first (universal, works even if caller name is unknown)
+          let tplPayload: any = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'template',
+            template: {
+              name: 'welcome_clinic_info',
+              language: { code: langCode }
+            }
+          };
+
+          let tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              messaging_product: 'whatsapp',
-              recipient_type: 'individual',
-              to: cleanPhone,
-              type: 'template',
-              template: {
-                name: 'welcome_clinic_info',
-                language: { code: langCode },
-                components: [
-                  {
-                    type: 'body',
-                    parameters: [
-                      { type: 'text', text: callerName }
-                    ]
-                  }
-                ]
-              }
-            })
+            body: JSON.stringify(tplPayload)
           });
 
-          const tplData = await tplRes.json();
+          let tplData = await tplRes.json();
+
+          // If template requires parameters, retry with caller name
+          if (!tplRes.ok && tplData.error?.message?.toLowerCase().includes('parameter')) {
+            tplPayload.template.components = [
+              {
+                type: 'body',
+                parameters: [{ type: 'text', text: callerName || 'Patient' }]
+              }
+            ];
+            tplRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(tplPayload)
+            });
+            tplData = await tplRes.json();
+          }
+
           if (tplRes.ok && tplData.messages) {
             deliverySuccess = true;
             deliveryMethod = `meta_template_${langCode}`;
