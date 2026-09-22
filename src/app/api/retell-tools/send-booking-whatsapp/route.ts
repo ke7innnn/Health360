@@ -5,8 +5,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     console.log('[Retell Tool: send-booking-whatsapp] Received payload:', JSON.stringify(body));
 
-    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    // WhatsApp Cloud API credentials (with fallback to verified credentials)
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || '1264792810055065';
+    const token = process.env.WHATSAPP_ACCESS_TOKEN || 'EAASaZAfwerw4BSPy41mNBLZB5kW7MC5TNDkNH9smpbnZAagtzjhWC1yi6pM1N4WZAqm3GfZA9hFNdrMtXsfepd89PXHj0rxYXCouZApit9YCPvXnJC0PSiRFh8N3a0rXDaEM0OkUL1XkTNqrNxAEbXnx3XZAEOZBb3iv3QMuwBCCE2UOK54NRtQZAMdMx3aFwbZCa5QQZDZD';
 
     if (!phoneId || !token) {
       console.error('[Retell Tool: send-booking-whatsapp] Missing WhatsApp credentials in environment.');
@@ -16,8 +17,19 @@ export async function POST(req: Request) {
     }
 
     // 1. Extract phone number and caller name from Retell payload
-    const rawPhone = body.args?.patient_phone || body.call?.from_number || body.call?.user_number;
-    const callerName = body.args?.patient_name || body.call?.retell_llm_dynamic_variables?.patient_name || 'Patient';
+    const rawPhone = 
+      body.args?.patient_phone || 
+      body.args?.phone_number || 
+      body.call?.from_number || 
+      body.call?.user_number ||
+      body.from_number ||
+      body.user_number;
+
+    const callerName = 
+      body.args?.patient_name || 
+      body.call?.retell_llm_dynamic_variables?.patient_name || 
+      body.retell_llm_dynamic_variables?.patient_name || 
+      'Patient';
 
     if (!rawPhone) {
       console.error('[Retell Tool: send-booking-whatsapp] No phone number provided in payload.');
@@ -28,8 +40,10 @@ export async function POST(req: Request) {
 
     // 2. Format phone number for Meta WhatsApp Cloud API (digits only, e.g. 919876543210)
     let cleanPhone = rawPhone.replace(/\D/g, '');
-    if (cleanPhone.length === 10) {
-      cleanPhone = `91${cleanPhone}`;
+    if (cleanPhone.length >= 10) {
+      // Handles leading 0 (e.g. 08698930978), +91, or raw 10 digits
+      const last10 = cleanPhone.slice(-10);
+      cleanPhone = `91${last10}`;
     }
 
     const websiteUrl = 'https://www.thehealth360.in/';
