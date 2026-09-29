@@ -11,6 +11,7 @@ import {
 import { Call } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { formatAgeDisplay } from '@/lib/ageUtils';
 
 interface PatientInfoCardProps {
   call: Call;
@@ -76,7 +77,7 @@ export default function PatientInfoCard({ call }: PatientInfoCardProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-0.5">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Age</span>
-              <p className="text-sm font-semibold text-slate-700">{call.age || '--'} years</p>
+              <p className="text-sm font-semibold text-slate-700">{formatAgeDisplay(call.age)}</p>
             </div>
             <div className="space-y-0.5">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Patient Type</span>

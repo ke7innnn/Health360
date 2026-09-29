@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import initialPatients from '@/lib/all_patients.json';
+import { parseOrCalculateAge } from '@/lib/ageUtils';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -27,11 +28,19 @@ export async function GET() {
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        return NextResponse.json({ success: true, count: data.length, patients: data }, { headers: corsHeaders });
+        const normalized = data.map(p => ({
+          ...p,
+          age: parseOrCalculateAge(p.age)
+        }));
+        return NextResponse.json({ success: true, count: normalized.length, patients: normalized }, { headers: corsHeaders });
       }
     }
 
-    return NextResponse.json({ success: true, count: initialPatients.length, patients: initialPatients }, { headers: corsHeaders });
+    const fallbackNormalized = initialPatients.map(p => ({
+      ...p,
+      age: parseOrCalculateAge(p.age)
+    }));
+    return NextResponse.json({ success: true, count: fallbackNormalized.length, patients: fallbackNormalized }, { headers: corsHeaders });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
   }
@@ -41,20 +50,23 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { patient_name, contact, age, patient_type, condition, gender } = body;
+    const rawName = body.patient_name || body.name || body.fullName;
+    const rawContact = body.contact || body.phone || body.phone_number;
+    const { patient_type, condition, gender, age, dob, dateOfBirth } = body;
 
-    if (!patient_name || !contact) {
+    if (!rawName || !rawContact) {
       return NextResponse.json(
         { success: false, error: 'patient_name and contact are required.' },
         { status: 400, headers: corsHeaders }
       );
     }
 
-    const formattedContact = contact.trim().startsWith('+') ? contact.trim() : `+91 ${contact.trim()}`;
+    const calculatedAge = parseOrCalculateAge(age || dateOfBirth || dob);
+    const formattedContact = String(rawContact).trim().startsWith('+') ? String(rawContact).trim() : `+91 ${String(rawContact).trim()}`;
     const patientRecord = {
-      patient_name: patient_name.trim(),
+      patient_name: String(rawName).trim(),
       contact: formattedContact,
-      age: age ? String(age).trim() : 'N/A',
+      age: calculatedAge || '',
       patient_type: patient_type || condition || (gender === 'female' ? 'Knee Pain' : 'Lower Back Pain'),
       created_at: new Date().toISOString(),
     };

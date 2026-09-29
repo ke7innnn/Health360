@@ -24,6 +24,7 @@ import {
   UserPlus
 } from 'lucide-react';
 import { db, Project, Patient } from '@/lib/supabase';
+import { parseOrCalculateAge, formatAgeDisplay } from '@/lib/ageUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -149,7 +150,8 @@ export default function NewCampaignPage() {
       name = toTitleCase(name);
       const rawContact = getRowValue(row, ['contact', 'phone', 'phone_number', 'contact_number', 'contact number']);
       const contact = sanitizePhone(rawContact);
-      const age = getRowValue(row, ['age']);
+      const ageRaw = getRowValue(row, ['age', 'dob', 'date of birth', 'date_of_birth', 'birth date', 'birthdate', 'age (years)']);
+      const age = parseOrCalculateAge(ageRaw);
       const patientType = getRowValue(row, ['patient_type', 'patienttype', 'patient type', 'type', 'condition'], 'General');
       const context = getRowValue(row, ['context', 'notes', 'prompt', 'patient_context']);
       return { patient_name: name, contact, age, patient_type: patientType, context, isValid: !!(name && contact) };
@@ -234,7 +236,7 @@ export default function NewCampaignPage() {
     const processed = valid.map(r => ({
       patient_name: toTitleCase((r.patient_name || '').trim()),
       contact: sanitizePhone(r.contact || ''),
-      age: (r.age || '').trim(),
+      age: parseOrCalculateAge(r.age),
       patient_type: (r.patient_type || '').trim() || 'General',
       context: (r.context || '').trim(),
       isValid: !!((r.patient_name || '').trim() && sanitizePhone(r.contact || '')),
@@ -375,7 +377,7 @@ export default function NewCampaignPage() {
                             const parsed = proj.patients.map(p => ({
                               patient_name: p.patient_name || '',
                               contact: p.contact || '',
-                              age: p.age || '',
+                              age: parseOrCalculateAge(p.age),
                               patient_type: p.patient_type || '',
                               context: p.context || '',
                               isValid: !!(p.patient_name?.trim() && p.contact?.trim())
@@ -507,7 +509,8 @@ export default function NewCampaignPage() {
                             </td>
                             <td className="px-2 py-1.5">
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="numeric"
                                 value={row.age}
                                 onChange={e => updateManualRow(idx, 'age', e.target.value)}
                                 placeholder="45"
@@ -593,7 +596,7 @@ export default function NewCampaignPage() {
                                           const newRow = {
                                             patient_name: p.patient_name,
                                             contact: p.contact,
-                                            age: p.age || '',
+                                            age: parseOrCalculateAge(p.age),
                                             patient_type: p.patient_type || '',
                                             context: '',
                                             isValid: true
@@ -683,7 +686,7 @@ export default function NewCampaignPage() {
                           <TableCell className="text-xs text-slate-600 font-mono">
                             {pat.contact || <span className="text-red-500 italic font-normal">Missing Contact</span>}
                           </TableCell>
-                          <TableCell className="text-xs text-slate-600">{pat.age || '--'}</TableCell>
+                          <TableCell className="text-xs text-slate-600">{formatAgeDisplay(pat.age)}</TableCell>
                           <TableCell className="text-xs text-slate-600">{pat.patient_type || 'General'}</TableCell>
                           <TableCell className="text-xs text-slate-400 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap">
                             {pat.context || '--'}

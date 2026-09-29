@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseOrCalculateAge } from './ageUtils';
 
 // Types matching Supabase schema
 export interface Campaign {
@@ -327,9 +328,16 @@ export const db = {
     return safeQuery(
       async () => {
         const { data, error } = await supabase!.from('patients').select('*').order('created_at', { ascending: false });
-        return { data, error };
+        if (error || !data) return { data, error };
+
+        const normalized = data.map(p => ({
+          ...p,
+          age: parseOrCalculateAge(p.age)
+        }));
+
+        return { data: normalized, error: null };
       },
-      () => getLocalStorageData<Patient[]>('h360_patients', []),
+      () => getLocalStorageData<Patient[]>('h360_patients', []).map(p => ({ ...p, age: parseOrCalculateAge(p.age) })),
       'h360_patients'
     );
   },
@@ -340,13 +348,15 @@ export const db = {
     // Always update local storage first for instant UI response
     const existing = getLocalStorageData<Patient[]>('h360_patients', []);
     for (const p of patients) {
+      const cleanAge = parseOrCalculateAge(p.age);
       const idx = existing.findIndex(e => e.contact === p.contact);
       if (idx >= 0) {
-        existing[idx] = { ...existing[idx], ...p };
+        existing[idx] = { ...existing[idx], ...p, age: cleanAge };
       } else {
         existing.unshift({
           id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           ...p,
+          age: cleanAge,
           created_at: new Date().toISOString()
         });
       }
@@ -359,7 +369,7 @@ export const db = {
         const payload = patients.map(p => ({
           patient_name: p.patient_name,
           contact: p.contact,
-          age: p.age,
+          age: parseOrCalculateAge(p.age),
           patient_type: p.patient_type
         }));
         await supabase.from('patients').upsert(payload, { onConflict: 'contact' });

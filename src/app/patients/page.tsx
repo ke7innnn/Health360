@@ -14,6 +14,7 @@ import {
   X 
 } from 'lucide-react';
 import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Call } from '@/lib/supabase';
+import { parseOrCalculateAge, formatAgeDisplay } from '@/lib/ageUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -112,7 +113,10 @@ export default function PatientsPage() {
 
     try {
       setIsAddingPatient(true);
-      const createdCall = await db.triggerNewSingleCallForPatient(newPatient);
+      const createdCall = await db.triggerNewSingleCallForPatient({
+        ...newPatient,
+        age: parseOrCalculateAge(newPatient.age)
+      });
       toast.success(`Patient added & queued for check-in call!`, {
         description: `Name: ${createdCall.patient_name} | Language: ${createdCall.language}`
       });
@@ -184,7 +188,7 @@ export default function PatientsPage() {
     const rows = filteredCalls.map(c => {
       const name = `"${c.patient_name.replace(/"/g, '""')}"`;
       const contact = `"${c.contact}"`;
-      const age = c.age || '';
+      const age = parseOrCalculateAge(c.age) || '';
       const type = `"${c.patient_type}"`;
       const lang = c.language || 'English';
       const status = c.status;
@@ -497,7 +501,7 @@ export default function PatientsPage() {
                     >
                       <TableCell>
                         <div className="font-semibold text-sm text-slate-800">{call.patient_name}</div>
-                        <div className="text-[10px] text-slate-400 font-semibold">{call.age || '--'} Yrs</div>
+                        <div className="text-[10px] text-slate-400 font-semibold">{formatAgeDisplay(call.age)}</div>
                       </TableCell>
                       <TableCell className="text-xs text-slate-600 font-mono">{call.contact}</TableCell>
                       <TableCell className="text-xs text-slate-600">{call.patient_type}</TableCell>

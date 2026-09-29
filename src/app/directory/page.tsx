@@ -9,6 +9,7 @@ import {
   Users
 } from 'lucide-react';
 import { db, supabase, isSupabaseConfigured, subscribeToRealtime, Patient } from '@/lib/supabase';
+import { parseOrCalculateAge, formatAgeDisplay } from '@/lib/ageUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -80,7 +81,7 @@ export default function PatientDirectoryPage() {
       await db.upsertPatients([{
         patient_name: newPatient.patient_name.trim(),
         contact: newPatient.contact.trim(),
-        age: newPatient.age.trim(),
+        age: parseOrCalculateAge(newPatient.age),
         patient_type: newPatient.patient_type.trim()
       }]);
       toast.success('Patient added to global directory!');
@@ -140,7 +141,7 @@ export default function PatientDirectoryPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Age</label>
-                <Input placeholder="45" type="number" value={newPatient.age} onChange={e => setNewPatient({...newPatient, age: e.target.value})} className="rounded-xl border-slate-200" />
+                <Input placeholder="45" type="text" inputMode="numeric" value={newPatient.age} onChange={e => setNewPatient({...newPatient, age: e.target.value})} className="rounded-xl border-slate-200" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Condition / Type</label>
@@ -199,7 +200,7 @@ export default function PatientDirectoryPage() {
                     <TableRow key={p.id} className="hover:bg-slate-50">
                       <TableCell className="font-medium text-slate-800">{p.patient_name}</TableCell>
                       <TableCell className="font-mono text-sm text-slate-600">{p.contact}</TableCell>
-                      <TableCell className="text-slate-600">{p.age || '--'}</TableCell>
+                      <TableCell className="text-slate-600">{formatAgeDisplay(p.age)}</TableCell>
                       <TableCell className="text-slate-600">{p.patient_type || '--'}</TableCell>
                       <TableCell className="text-right text-slate-400 text-xs">
                         {new Date(p.created_at).toLocaleDateString()}

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
+import { parseOrCalculateAge } from './ageUtils';
 
 export interface Campaign {
   id: string;
@@ -184,7 +185,7 @@ export async function createAndLaunchCampaign(
     campaign_id: campaignId,
     patient_name: p.patient_name,
     contact: p.contact,
-    age: p.age || '',
+    age: parseOrCalculateAge(p.age) || '',
     patient_type: p.patient_type || 'General',
     context: p.context || '',
     language: p.language || 'Hindi',
