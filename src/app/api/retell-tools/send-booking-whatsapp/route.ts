@@ -138,10 +138,10 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Rich text fallback (only if both templates failed, or to add rich context)
+    // 5. Rich text fallback (only if templates failed, or to add rich context)
     if (!deliverySuccess) {
       try {
-        const richMessage = `🌿 *Health 360 Physiotherapy & Craniosacral Clinic* 🌿\n\nHello ${callerName}! Thank you for calling Dr. Rashmita's Clinic.\n\n🌐 *Website & Online Booking:*\n👉 ${websiteUrl}\n\n📍 *Clinic Address:*\nHealth 360 Clinic, Shop no. 1 & 2, Amardeep Society, Om Nagar, Vasai West.\n\n🗺️ *Google Maps Location:*\n${mapsUrl}\n\n🕙 *Clinic Timings:*\n• Morning: 10:00 AM – 2:00 PM\n• Evening: 5:00 PM – 9:00 PM\n\n☎️ *Contact:* 8482812859 / 9834848981\n\nWe look forward to welcoming you! 🌸`;
+        const richMessage = `🌿 *Health 360 Physiotherapy & Craniosacral Clinic* 🌿\n\nHello ${callerName}! Thank you for calling Dr. Rashmita's Clinic.\n\n🌐 *Website & Online Booking:*\n👉 ${websiteUrl}\n\n📍 *Clinic Address:*\nHealth 360 Clinic, Shop no. 1 & 2, Amardeep Society, Om Nagar, Vasai West.\n\n🗺️ *Google Maps Location:*\n${mapsUrl}\n\n🕙 *Clinic Timings:*\n• Morning: 10:00 AM – 2:00 PM\n• Evening: 5:00 PM – 9:00 PM\n\n⭐ *We'd love your feedback!*\nPlease take a moment to review Health 360 Physiotherapy Clinic on Google:\n👉 https://share.google/7XS68kCqwWGRfKdAa\nThank you for your support! 🙏\n\n☎️ *Contact:* 8482812859 / 9834848981\n\nWe look forward to welcoming you! 🌸`;
 
         const textRes = await fetch(`https://graph.facebook.com/v22.0/${phoneId}/messages`, {
           method: 'POST',
